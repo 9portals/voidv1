@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Void Global Chat</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: black;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 20px;
+      text-align: center;
+      background-color: #111;
+      font-size: 28px;
+      font-weight: bold;
+      border-bottom: 1px solid #444;
+    }
+
+    #subtitle {
+      text-align: center;
+      font-size: 20px;
+      margin-top: 10px;
+      color: #aaa;
+    }
+
+    #inputContainer {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+      background-color: #111;
+      border-bottom: 1px solid #333;
+    }
+
+    #messageInput {
+      width: 60%;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background-color: #111;
+      color: white;
+      margin-right: 10px;
+    }
+
+    #sendButton {
+      padding: 10px 20px;
+      border: none;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    #sendButton:hover {
+      background-color: #555;
+    }
+
+    #chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 10px 20px;
+      overflow: hidden;
+    }
+
+    .message {
+      margin: 5px 0;
+      padding: 8px 12px;
+      border-radius: 5px;
+      background-color: #222;
+      color: white;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+
+    .system {
+      color: #4da6ff;
+    }
+
+    .dev {
+      color: orange;
+    }
+  </style>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+  <header>VOID — Global Chat</header>
+  <div id="subtitle">Say something in the void...</div>
+
+  <div id="inputContainer">
+    <input type="text" id="messageInput" placeholder="Your message..." />
+    <button id="sendButton">Send</button>
+  </div>
+
+  <div id="chat"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyClW4zHDde1rQm6RkHQcD2rM0sklBBgdrM",
+      authDomain: "void-d9ec4.firebaseapp.com",
+      databaseURL: "https://void-d9ec4-default-rtdb.firebaseio.com",
+      projectId: "void-d9ec4",
+      storageBucket: "void-d9ec4.appspot.com",
+      messagingSenderId: "267268035851",
+      appId: "1:267268035851:web:d535fe4175c06f170f3e0e"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const chatDiv = document.getElementById("chat");
+    const input = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+
+    let localMessages = [];
+
+    function renderMessages() {
+      chatDiv.innerHTML = "";
+      const now = Date.now();
+      localMessages
+        .sort((a, b) => a.expiresAt - b.expiresAt)
+        .forEach(msg => {
+          const secondsLeft = Math.max(0, Math.ceil((msg.expiresAt - now) / 1000));
+          const div = document.createElement("div");
+          div.className = "message";
+          if (msg.sender === "System") div.classList.add("system");
+          if (msg.sender === "DevBot") div.classList.add("dev");
+          div.setAttribute("data-key", msg.key);
+          div.textContent = `${msg.sender}: ${msg.text} (${secondsLeft}s)`;
+          chatDiv.appendChild(div);
+        });
+    }
+
+    function updateCountdowns() {
+      const now = Date.now();
+      document.querySelectorAll(".message").forEach(div => {
+        const key = div.getAttribute("data-key");
+        const msg = localMessages.find(m => m.key === key);
+        if (msg) {
+          const secondsLeft = Math.max(0, Math.ceil((msg.expiresAt - now) / 1000));
+          div.textContent = `${msg.sender}: ${msg.text} (${secondsLeft}s)`;
+        }
+      });
+    }
+
+    setInterval(updateCountdowns, 1000);
+
+    function getDuration(msg) {
+      if (msg.sender === "System") return 30000;
+      if (msg.sender === "DevBot") return 10000;
+      return 10000; // default user message duration
+    }
+
+    function addMessage(msg, key) {
+      const now = Date.now();
+      const duration = getDuration(msg);
+      const timeLeft = duration - (now - msg.timestamp);
+      if (timeLeft <= 0) return;
+
+      msg.key = key;
+      msg.expiresAt = msg.timestamp + duration;
+
+      localMessages.push(msg);
+      if (localMessages.length > 10) {
+        localMessages.sort((a, b) => a.expiresAt - b.expiresAt);
+        const removed = localMessages.shift();
+        db.ref("voidMessages").child(removed.key).remove();
+      }
+
+      renderMessages();
+
+      setTimeout(() => {
+        db.ref("voidMessages").child(key).remove();
+      }, timeLeft);
+    }
+
+    db.ref("voidMessages").on("child_added", snapshot => {
+      addMessage(snapshot.val(), snapshot.key);
+    });
+
+    db.ref("voidMessages").on("child_removed", snapshot => {
+      localMessages = localMessages.filter(msg => msg.key !== snapshot.key);
+      renderMessages();
+    });
+
+    sendButton.onclick = () => {
+      const text = input.value.trim();
+      if (text !== "") {
+        const msg = {
+          text,
+          timestamp: Date.now(),
+          sender: "Anonymous"
+        };
+        db.ref("voidMessages").push(msg);
+        input.value = "";
+      }
+    };
+
+    function sendSystemMessage() {
+      const phrases = [
+        "The void whispers...",
+        "A ripple echoes.",
+        "The dark shifts.",
+        "A flicker stirs.",
+        "Echoes pulse softly."
+      ];
+      const msg = {
+        text: phrases[Math.floor(Math.random() * phrases.length)],
+        timestamp: Date.now(),
+        sender: "System"
+      };
+      db.ref("voidMessages").push(msg);
+    }
+
+    function sendDevMessage() {
+      const devUpdates = [
+        "We are currently developing...",
+        "Features are being built in the void...",
+        "Development is in progress..."
+      ];
+      const msg = {
+        text: devUpdates[Math.floor(Math.random() * devUpdates.length)],
+        timestamp: Date.now(),
+        sender: "DevBot"
+      };
+      db.ref("voidMessages").push(msg);
+    }
+
+    setInterval(sendSystemMessage, 15000); // every 15s
+    setInterval(sendDevMessage, 45000);    // every 45s
+  </script>
+</body>
+</html>
