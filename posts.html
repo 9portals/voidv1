@@ -16,7 +16,7 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 .comments { margin-top:20px; }
 .comment { border-top:1px solid #eee; padding:12px 0; display:flex; justify-content:space-between; align-items:center; }
 
-/* Changed: usernames now black and not underlined */
+/* Only change: remove blue + underline */
 .comment b,
 .author-name {
   margin-right:5px;
@@ -69,6 +69,7 @@ const firebaseConfig = {
   messagingSenderId: "816402062445",
   appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
 };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -115,17 +116,15 @@ async function loadPost(){
   contentEl.textContent = post.content;
   authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b>`;
 
-  // Author click
-  document.addEventListener("click", function(e){
-    if(e.target.classList.contains("author-name") || e.target.classList.contains("comment-user")){
-      const uid = e.target.dataset.uid;
-      if(uid){
-        window.location.href = `account.html?uid=${uid}`;
-      }
-    }
-  });
+  // Attach click ONLY to author (safe)
+  const authorEl = document.querySelector(".author-name");
+  if(authorEl){
+    authorEl.onclick = () => {
+      window.location.href = `account.html?uid=${authorEl.dataset.uid}`;
+    };
+  }
 
-  // Reactions
+  // Reactions (UNCHANGED)
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
     const type = btn.dataset.reaction;
     btn.textContent = `${btn.textContent.split(" ")[0]} ${post.reactions?.[type]||0}`;
@@ -136,7 +135,7 @@ async function loadPost(){
     };
   });
 
-  // Comments List
+  // Comments List (UNCHANGED except click added safely)
   commentsListEl.innerHTML = "";
   (post.comments || []).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt))
     .forEach(c=>{
@@ -149,13 +148,21 @@ async function loadPost(){
         <button class="reply-btn btn-dark" style="display:inline-block; font-size: 0.8em; padding: 4px 8px;">Reply</button>`;
 
       div.querySelector(".reply-btn").onclick = ()=>{
-        window.location.href = \`comments.html?postId=${postId}&replyTo=${encodeURIComponent(c.authorName)}\`;
+        window.location.href = `comments.html?postId=${postId}&replyTo=${encodeURIComponent(c.authorName)}`;
       };
+
+      const commentUser = div.querySelector(".comment-user");
+      if(commentUser){
+        commentUser.onclick = () => {
+          window.location.href = `account.html?uid=${commentUser.dataset.uid}`;
+        };
+      }
+
       commentsListEl.appendChild(div);
     });
 }
 
-addCommentBtn.onclick = () => window.location.href = \`comments.html?postId=${postId}\`;
+addCommentBtn.onclick = () => window.location.href = `comments.html?postId=${postId}`;
 
 function escapeHTML(str){
   return str?.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
