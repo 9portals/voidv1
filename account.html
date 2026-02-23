@@ -1,87 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pulsenet - Account</title>
+<title>Account</title>
 <style>
-  body { font-family: sans-serif; background: #FDFDFF; color: #111; margin: 0; padding: 20px; }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
-  
-  /* Global Button Style */
-  .btn-dark { 
-    background: #111; 
-    color: #fff; 
-    padding: 10px 18px; 
-    border-radius: 5px; 
-    border: 1px solid #ccc; 
-    cursor: pointer; 
-    font-family: inherit;
-    text-decoration: none;
-    display: inline-block;
-  }
-
-  #profile-container { 
-    max-width: 500px; 
-    margin: 0 auto; 
-    text-align: center; 
-    border: 1px solid #eee; 
-    padding: 40px; 
-    border-radius: 15px;
-    background: #fff;
-  }
-
-  .avatar-placeholder {
-    width: 80px;
-    height: 80px;
-    background: #eee;
-    border-radius: 50%;
-    margin: 0 auto 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    color: #666;
-  }
-
-  h2 { margin: 10px 0; font-size: 1.8rem; }
-  p.uid-label { color: #888; font-size: 0.8rem; margin-bottom: 30px; }
-
-  .actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
-  
-  #logout-btn { background: #fff; color: #d9534f; border: 1px solid #d9534f; }
+body { font-family:sans-serif; background:#FDFDFF; padding:20px; color:#111; }
+.card { border:1px solid #ddd; padding:20px; border-radius:15px; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1 style="cursor:pointer" onclick="window.location.href='posts.html'">Perspective</h1>
-  <button id="back-btn" class="btn-dark">Back</button>
-</header>
-
-<div id="profile-container">
-  <div class="avatar-placeholder" id="avatar-initial">?</div>
-  <h2 id="display-name">Loading...</h2>
-  <p class="uid-label" id="user-uid"></p>
-
-  <div class="actions">
-    <button id="edit-profile-btn" class="btn-dark" style="display:none;">Edit Profile</button>
-    <button id="logout-btn" class="btn-dark" style="display:none;">Logout</button>
-  </div>
+<h1>Account</h1>
+<div class="card">
+  <h2 id="username"></h2>
+  <p id="email"></p>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  apiKey: "YOUR_KEY",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
-  projectId: "pulsenet-d1fe0",
-  storageBucket: "pulsenet-d1fe0.firebasestorage.app",
-  messagingSenderId: "816402062445",
-  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
+  projectId: "pulsenet-d1fe0"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -89,63 +32,27 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
-// DOM
-const displayNameEl = document.getElementById("display-name");
-const uidEl = document.getElementById("user-uid");
-const avatarInitial = document.getElementById("avatar-initial");
-const logoutBtn = document.getElementById("logout-btn");
-const editBtn = document.getElementById("edit-profile-btn");
-const backBtn = document.getElementById("back-btn");
-
-// URL Params
 const params = new URLSearchParams(window.location.search);
-const targetUid = params.get("uid");
+const profileUid = params.get("uid");
 
-onAuthStateChanged(auth, async (user) => {
-  // 1. Determine which UID to load
-  const uidToFetch = targetUid || (user ? user.uid : null);
-
-  if (!uidToFetch) {
-    window.location.href = "login.html";
+async function loadProfile(uid){
+  const snap = await getDoc(doc(db,"artifacts",appId,"public","data","users",uid));
+  if(!snap.exists()){
+    document.getElementById("username").textContent="User not found";
     return;
   }
-
-  // 2. Show Logout/Edit only if it's the user's own account
-  if (user && user.uid === uidToFetch) {
-    logoutBtn.style.display = "block";
-    editBtn.style.display = "block";
-  }
-
-  // 3. Fetch User Data from Firestore
-  try {
-    // Assuming user data is stored in a 'users' collection
-    const userDoc = await getDoc(doc(db, "artifacts", appId, "public", "data", "users", uidToFetch));
-    
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      renderProfile(data.username || data.displayName || "Anonymous", uidToFetch);
-    } else if (user && user.uid === uidToFetch) {
-      // Fallback to Auth data if Firestore doc doesn't exist yet for current user
-      renderProfile(user.displayName || "New User", user.uid);
-    } else {
-      displayNameEl.textContent = "User Not Found";
-    }
-  } catch (e) {
-    console.error(e);
-    displayNameEl.textContent = "Error loading profile";
-  }
-});
-
-function renderProfile(name, uid) {
-  displayNameEl.textContent = name;
-  uidEl.textContent = `ID: ${uid}`;
-  avatarInitial.textContent = name.charAt(0).toUpperCase();
+  const user = snap.data();
+  document.getElementById("username").textContent = user.username;
+  document.getElementById("email").textContent = user.email || "";
 }
 
-// Actions
-backBtn.onclick = () => window.history.back();
-logoutBtn.onclick = () => signOut(auth).then(() => window.location.href = "posts.html");
-
+if(profileUid){
+  loadProfile(profileUid);
+} else {
+  onAuthStateChanged(auth,user=>{
+    if(user) loadProfile(user.uid);
+  });
+}
 </script>
 </body>
 </html>
