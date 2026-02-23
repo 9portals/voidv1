@@ -3,10 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Comments</title>
+<title>Comments / Reply</title>
 <style>
 body { font-family:sans-serif; padding:20px; }
-.comment { border-bottom:1px solid #ddd; padding:10px 0; display:flex; justify-content:space-between; align-items:center; }
 textarea { width:100%; margin-bottom:5px; }
 button { padding:8px 12px; cursor:pointer; margin:2px; }
 </style>
@@ -14,8 +13,6 @@ button { padding:8px 12px; cursor:pointer; margin:2px; }
 <body>
 
 <h1 id="post-title"></h1>
-<div id="comments-list"></div>
-
 <div id="add-comment">
   <textarea id="comment-text" rows="3" placeholder="Add a comment..."></textarea>
   <button id="submit-comment">Post Comment</button>
@@ -42,7 +39,6 @@ const appId = "pulsenet-d1fe0";
 
 // DOM
 const postTitle = document.getElementById("post-title");
-const commentsList = document.getElementById("comments-list");
 const commentText = document.getElementById("comment-text");
 const submitCommentBtn = document.getElementById("submit-comment");
 const cancelBtn = document.getElementById("cancel-btn");
@@ -59,45 +55,16 @@ const params = new URLSearchParams(window.location.search);
 const postId = params.get("postId");
 const replyTo = params.get("replyTo") || null;
 
-async function loadComments() {
+// Load post title
+async function loadPostTitle(){
   const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
   if(!postDoc.exists()) return alert("Post not found!");
   const post = postDoc.data();
-
   postTitle.textContent = post.title;
-  commentsList.innerHTML = (post.comments||[]).map(c=>`
-    <div class="comment"><b>${c.authorName}</b>: ${c.text}
-      <button class="reply-btn">Reply</button>
-      <button class="like-comment-btn">❤️ ${c.likes||0}</button>
-      <button class="burn-comment-btn">🔥 ${c.burns||0}</button>
-    </div>
-  `).join("");
-
-  // Attach event listeners
-  Array.from(commentsList.querySelectorAll(".reply-btn")).forEach((btn,i)=>{
-    btn.onclick = ()=> window.location.href=`comments.html?postId=${postId}&replyTo=${post.comments[i].authorId}`;
-  });
-
-  Array.from(commentsList.querySelectorAll(".like-comment-btn")).forEach((btn,i)=>{
-    btn.onclick = async ()=>{
-      if(!currentUser) return alert("Login to react!");
-      post.comments[i].likes = (post.comments[i].likes||0)+1;
-      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: post.comments});
-      loadComments();
-    };
-  });
-
-  Array.from(commentsList.querySelectorAll(".burn-comment-btn")).forEach((btn,i)=>{
-    btn.onclick = async ()=>{
-      if(!currentUser) return alert("Login to react!");
-      post.comments[i].burns = (post.comments[i].burns||0)+1;
-      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: post.comments});
-      loadComments();
-    };
-  });
 }
+loadPostTitle();
 
-// Submit comment
+// Submit comment / reply
 submitCommentBtn.onclick = async ()=>{
   if(!currentUser) return alert("Login to comment!");
   const text = commentText.value.trim();
@@ -112,14 +79,11 @@ submitCommentBtn.onclick = async ()=>{
       createdAt: new Date().toISOString()
     })
   });
-  commentText.value="";
-  loadComments();
+  window.history.back(); // Go back to post page
 };
 
-// Cancel button
+// Cancel
 cancelBtn.onclick = ()=>window.history.back();
-
-loadComments();
 </script>
 </body>
 </html>
