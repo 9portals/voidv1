@@ -30,242 +30,187 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signOut 
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { 
+  getFirestore, 
+  collection, 
+  onSnapshot, 
+  addDoc, 
+  serverTimestamp, 
+  doc, 
+  getDoc 
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-// 1. Setup Environment Variables
-const firebaseConfig = JSON.parse(__firebase_config);
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  authDomain: "pulsenet-d1fe0.firebaseapp.com",
+  projectId: "pulsenet-d1fe0",
+  storageBucket: "pulsenet-d1fe0.firebasestorage.app",
+  messagingSenderId: "816402062445",
+  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364",
+  measurementId: "G-MDN646R1XP"
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'pulsenet-d1fe0';
 
-// State Management
+// State
 let currentUser = null;
 let currentView = 'feed';
 let viewParams = {};
 let feedUnsubscribe = null;
 
-// UI Elements
+// DOM
 const navControls = document.getElementById('nav-controls');
 const viewContainer = document.getElementById('view-container');
 const loadingEl = document.getElementById('loading');
 
-// 2. Authentication Logic (Rule 3)
-async function initAuth() {
-    try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-            await signInAnonymously(auth);
-        }
-    } catch (err) {
-        console.error("Auth failed", err);
-        renderError("Authentication failed. Please refresh.");
-    }
-}
-
-// Watch for auth state changes and manage view transitions
+// 🔥 AUTH CHECK (NO ANONYMOUS LOGIN)
 onAuthStateChanged(auth, (user) => {
-    currentUser = user;
-    renderNav();
-    
-    if (user) {
+    if(user){
+        currentUser = user;
         loadingEl.classList.add('hidden');
-        // Start from feed view once authenticated
+        renderNav();
         navigateTo('feed');
     } else {
-        // If logged out, stop any active listeners
-        if (feedUnsubscribe) {
-            feedUnsubscribe();
-            feedUnsubscribe = null;
-        }
-        loadingEl.classList.remove('hidden');
-        loadingEl.textContent = "Please sign in...";
-        viewContainer.innerHTML = "";
+        window.location.href = "login.html";
     }
 });
 
-// Navigation Logic (SPA style)
+// Navigation
 window.navigateTo = (view, params = {}) => {
-    // Cleanup active feed listener when leaving feed view
-    if (currentView === 'feed' && view !== 'feed' && feedUnsubscribe) {
+    if(currentView==='feed' && view!=='feed' && feedUnsubscribe){
         feedUnsubscribe();
         feedUnsubscribe = null;
     }
-    
-    currentView = view;
-    viewParams = params;
+    currentView=view; 
+    viewParams=params;
     renderView();
 };
 
-function renderNav() {
-    if (!currentUser) {
-        navControls.innerHTML = `<span class="text-sm text-gray-400">Connecting...</span>`;
-        return;
-    }
-    
+function renderNav(){
     navControls.innerHTML = `
-        <button onclick="navigateTo('new-story')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">New Story</button>
-        <button onclick="handleLogout()" class="border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Logout</button>
+        <button onclick="navigateTo('new-story')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
+            New Story
+        </button>
+        <button onclick="handleLogout()" class="border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
+            Logout
+        </button>
     `;
 }
 
-window.handleLogout = () => signOut(auth);
+window.handleLogout = async () => {
+    await signOut(auth);
+    window.location.href = "login.html";
+};
 
 // Views
-function renderView() {
-    // Only render views if we have a user (Rule 3 guard)
-    if (!currentUser) return;
-
+function renderView(){
     viewContainer.innerHTML = "";
-    
-    switch(currentView) {
-        case 'feed':
-            renderFeed();
-            break;
-        case 'new-story':
-            renderNewStory();
-            break;
-        case 'post-detail':
-            renderPostDetail(viewParams.id);
-            break;
+
+    switch(currentView){
+        case 'feed': renderFeed(); break;
+        case 'new-story': renderNewStory(); break;
+        case 'post-detail': renderPostDetail(viewParams.id); break;
     }
 }
 
-// 3. Firestore Logic (Rule 1 & 2)
-function renderFeed() {
-    viewContainer.innerHTML = `<h2 class="text-xl font-bold mb-6">Latest Perspectives</h2><div id="posts-list" class="space-y-4"></div>`;
-    const postsList = document.getElementById('posts-list');
-    
-    // Ensure we don't start multiple listeners
-    if (feedUnsubscribe) feedUnsubscribe();
+// Feed
+function renderFeed(){
+    viewContainer.innerHTML = `
+        <h2 class="text-xl font-bold mb-6">Latest Perspectives</h2>
+        <div id="posts-list" class="space-y-4"></div>
+    `;
 
-    const postsCol = collection(db, "artifacts", appId, "public", "data", "posts");
-    
-    // Rule 3: This listener is only set up inside renderView() which is gated by currentUser
-    feedUnsubscribe = onSnapshot(postsCol, (snapshot) => {
-        const posts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        // Rule 2: Sort in memory to avoid index requirements
-        posts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        
-        postsList.innerHTML = posts.length ? "" : '<p class="text-gray-500 text-center py-10">No stories yet. Be the first!</p>';
-        
-        posts.forEach(post => {
+    const postsList = document.getElementById('posts-list');
+    const postsCol = collection(db,"posts");
+
+    feedUnsubscribe = onSnapshot(postsCol, snapshot=>{
+        const posts = snapshot.docs.map(d=>({id:d.id, ...d.data()}));
+        posts.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+
+        postsList.innerHTML = posts.length ? "" : 
+            '<p class="text-gray-500 text-center py-10">No stories yet.</p>';
+
+        posts.forEach(post=>{
             const card = document.createElement('div');
-            card.className = "post-card bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer";
-            card.innerHTML = `
-                <h3 class="text-xl font-semibold mb-2 text-gray-800">${escapeHtml(post.title || 'Untitled')}</h3>
-                <p class="text-gray-600 mb-4 line-clamp-3">${escapeHtml(post.content || '')}</p>
-                <div class="flex items-center text-sm text-gray-400 justify-between">
-                    <span>${escapeHtml(post.authorName || 'Anonymous')}</span>
-                    <span>${(post.comments || []).length} comments</span>
+            card.className="post-card bg-white p-6 rounded-xl border shadow-sm cursor-pointer";
+            card.innerHTML=`
+                <h3 class="text-xl font-semibold mb-2">${escapeHtml(post.title)}</h3>
+                <p class="text-gray-600 mb-4">${escapeHtml(post.content?.slice(0,150))}...</p>
+                <div class="text-sm text-gray-400 flex justify-between">
+                    <span>${escapeHtml(post.authorName || "Anonymous")}</span>
                 </div>
             `;
-            card.onclick = () => navigateTo('post-detail', { id: post.id });
+            card.onclick = ()=>navigateTo('post-detail',{id:post.id});
             postsList.appendChild(card);
         });
-    }, (err) => {
-        console.error("Feed error:", err);
-        postsList.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded">Error: ${err.message}. Please check if you are signed in.</div>`;
     });
 }
 
-function renderNewStory() {
-    viewContainer.innerHTML = `
+// New Story
+function renderNewStory(){
+    viewContainer.innerHTML=`
         <div class="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-sm border">
             <h2 class="text-2xl font-bold mb-6">Write a Story</h2>
             <form id="story-form" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                    <input type="text" id="title" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Content</label>
-                    <textarea id="content" rows="8" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
-                </div>
-                <div class="flex space-x-3 pt-4">
-                    <button type="submit" id="submit-story" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">Publish</button>
-                    <button type="button" onclick="navigateTo('feed')" class="text-gray-500 px-6 py-2">Cancel</button>
-                </div>
+                <input type="text" id="title" placeholder="Title" required class="w-full p-3 border rounded-lg">
+                <textarea id="content" rows="8" placeholder="Content" required class="w-full p-3 border rounded-lg"></textarea>
+                <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-lg">Publish</button>
             </form>
         </div>
     `;
 
-    document.getElementById('story-form').onsubmit = async (e) => {
+    document.getElementById('story-form').onsubmit=async e=>{
         e.preventDefault();
-        if (!currentUser) return;
 
-        const btn = document.getElementById('submit-story');
-        btn.disabled = true;
-        btn.textContent = "Publishing...";
+        await addDoc(collection(db,"posts"),{
+            title: document.getElementById('title').value,
+            content: document.getElementById('content').value,
+            authorId: currentUser.uid,
+            authorName: currentUser.displayName || "Anonymous",
+            createdAt: serverTimestamp()
+        });
 
-        const title = document.getElementById('title').value;
-        const content = document.getElementById('content').value;
-        
-        try {
-            await addDoc(collection(db, "artifacts", appId, "public", "data", "posts"), {
-                title,
-                content,
-                authorId: currentUser.uid,
-                authorName: currentUser.isAnonymous ? "Guest" : (currentUser.displayName || "Anonymous"),
-                createdAt: serverTimestamp(),
-                comments: []
-            });
-            navigateTo('feed');
-        } catch (err) {
-            btn.disabled = false;
-            btn.textContent = "Publish";
-            renderError("Failed to save story: " + err.message);
-        }
+        navigateTo('feed');
     };
 }
 
-async function renderPostDetail(id) {
-    viewContainer.innerHTML = `<div class="animate-pulse space-y-4"><div class="h-8 bg-gray-200 w-3/4 rounded"></div><div class="h-32 bg-gray-200 rounded"></div></div>`;
-    
-    try {
-        if (!currentUser) return;
-        const docRef = doc(db, "artifacts", appId, "public", "data", "posts", id);
-        const snap = await getDoc(docRef);
-        
-        if (!snap.exists()) {
-            viewContainer.innerHTML = `<p class="text-center py-10">Post not found.</p>`;
-            return;
-        }
-        
-        const post = snap.data();
-        viewContainer.innerHTML = `
-            <button onclick="navigateTo('feed')" class="text-indigo-600 mb-6 flex items-center hover:underline">← Back to Feed</button>
-            <article class="bg-white p-8 rounded-2xl shadow-sm border mb-8">
-                <h2 class="text-4xl font-bold mb-4">${escapeHtml(post.title)}</h2>
-                <div class="text-gray-500 text-sm mb-8">By ${escapeHtml(post.authorName || 'Anonymous')}</div>
-                <div class="prose max-w-none text-gray-800 leading-relaxed whitespace-pre-wrap">${escapeHtml(post.content)}</div>
-            </article>
-        `;
-    } catch (err) {
-        renderError("Could not load post: " + err.message);
+// Post Detail
+async function renderPostDetail(id){
+    const docRef = doc(db,"posts",id);
+    const snap = await getDoc(docRef);
+
+    if(!snap.exists()){
+        viewContainer.innerHTML="<p>Post not found.</p>";
+        return;
     }
+
+    const post = snap.data();
+
+    viewContainer.innerHTML=`
+        <button onclick="navigateTo('feed')" class="text-indigo-600 mb-6">← Back</button>
+        <article class="bg-white p-8 rounded-2xl shadow-sm border">
+            <h2 class="text-4xl font-bold mb-4">${escapeHtml(post.title)}</h2>
+            <div class="text-gray-500 text-sm mb-8">By ${escapeHtml(post.authorName)}</div>
+            <div class="whitespace-pre-wrap">${escapeHtml(post.content)}</div>
+        </article>
+    `;
 }
 
-function renderError(msg) {
-    const errDiv = document.createElement('div');
-    errDiv.className = "bg-red-50 text-red-600 p-4 rounded-lg mb-4 border border-red-100";
-    errDiv.textContent = msg;
-    viewContainer.prepend(errDiv);
-}
-
-function escapeHtml(text) {
-    if (!text) return "";
-    const div = document.createElement('div');
-    div.textContent = text;
+// Helpers
+function escapeHtml(text){
+    const div=document.createElement('div');
+    div.textContent=text;
     return div.innerHTML;
 }
-
-// Initial Kickoff
-initAuth();
-
 </script>
 </body>
 </html>
