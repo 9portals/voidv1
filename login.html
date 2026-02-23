@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pulsenet Vanilla SPA</title>
+<style>
+body { font-family: sans-serif; background:#FDFDFF; color:#111; margin:0; padding:0;}
+#app { max-width: 800px; margin:auto; padding:20px;}
+.hidden { display:none;}
+input, textarea, button { font-family:inherit; margin:5px 0; padding:8px; border-radius:5px; border:1px solid #ccc;}
+button { cursor:pointer;}
+.post { border:1px solid #ddd; padding:15px; border-radius:15px; margin-bottom:15px;}
+.reaction-btn { margin-right:10px; cursor:pointer;}
+.comment { margin-left:15px; font-size:14px;}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+<!-- AUTH -->
+<div id="auth-section">
+<h2 id="auth-title">Login</h2>
+<form id="auth-form">
+<input type="text" id="fullname" placeholder="Full Name" class="hidden"/>
+<input type="email" id="email" placeholder="Email" required/>
+<input type="password" id="password" placeholder="Password" required/>
+<button type="submit" id="auth-btn">Login</button>
+</form>
+<button id="toggle-auth">Switch to Register</button>
+<p id="auth-error" style="color:red"></p>
+</div>
+
+<!-- FEED -->
+<div id="feed-section" class="hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h1>Perspective</h1>
+<button id="logout-btn">Logout</button>
+</div>
+<button id="show-publish-btn">New Story</button>
+<button id="show-account-btn">Account</button>
+<div id="posts"></div>
+</div>
+
+<!-- PUBLISH -->
+<div id="publish-section" class="hidden">
+<h2>New Story</h2>
+<form id="publish-form">
+<input type="text" id="post-title" placeholder="Title" required/>
+<textarea id="post-content" rows="8" placeholder="Tell your story..." required></textarea>
+<button type="submit">Publish</button>
+</form>
+<button id="back-feed-btn">Back to Feed</button>
+</div>
+
+<!-- ACCOUNT -->
+<div id="account-section" class="hidden">
+<h2>Account</h2>
+<p><b>Name:</b> <span id="display-name"></span></p>
+<p><b>Email:</b> <span id="display-email"></span></p>
+<input type="text" id="edit-display-name" placeholder="New Display Name"/>
+<button id="save-display-btn">Save</button>
+<button id="back-feed-btn2">Back to Feed</button>
+</div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import {
+  getAuth, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, updateProfile,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import {
+  getFirestore, collection, addDoc,
+  onSnapshot, doc, updateDoc,
+  increment, serverTimestamp, arrayUnion
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+/* 🔥 YOUR CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  authDomain: "pulsenet-d1fe0.firebaseapp.com",
+  projectId: "pulsenet-d1fe0",
+  storageBucket: "pulsenet-d1fe0.firebasestorage.app",
+  messagingSenderId: "816402062445",
+  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364",
+  measurementId: "G-MDN646R1XP"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = "pulsenet-d1fe0";
+
+const postsCol = collection(db,"artifacts",appId,"public","data","posts");
+
+/* DOM */
+const authSection = document.getElementById("auth-section");
+const feedSection = document.getElementById("feed-section");
+const publishSection = document.getElementById("publish-section");
+const accountSection = document.getElementById("account-section");
+const postsContainer = document.getElementById("posts");
+const authError = document.getElementById("auth-error");
+
+let isLogin = true;
+let unsubscribePosts = null;
+
+/* Toggle Auth */
+document.getElementById("toggle-auth").onclick = () => {
+  isLogin = !isLogin;
+  document.getElementById("auth-title").innerText = isLogin?"Login":"Register";
+  document.getElementById("auth-btn").innerText = isLogin?"Login":"Register";
+  document.getElementById("fullname").classList.toggle("hidden");
+};
+
+/* Auth Submit */
+document.getElementById("auth-form").onsubmit = async e=>{
+  e.preventDefault();
+  const email = email.value;
+  const password = password.value;
+  const fullname = fullname.value;
+
+  try{
+    if(isLogin){
+      await signInWithEmailAndPassword(auth,email,password);
+    } else {
+      const cred = await createUserWithEmailAndPassword(auth,email,password);
+      await updateProfile(cred.user,{displayName:fullname});
+    }
+    authError.innerText="";
+  }catch(err){
+    authError.innerText=err.message;
+  }
+};
+
+/* Auth State */
+onAuthStateChanged(auth,user=>{
+  if(user){
+    authSection.classList.add("hidden");
+    feedSection.classList.remove("hidden");
+    document.getElementById("display-name").innerText = user.displayName||"Anonymous";
+    document.getElementById("display-email").innerText = user.email;
+
+    startPostsListener();
+  } else {
+    if(unsubscribePosts) unsubscribePosts();
+    authSection.classList.remove("hidden");
+    feedSection.classList.add("hidden");
+    publishSection.classList.add("hidden");
+    accountSection.classList.add("hidden");
+  }
+});
+
+/* Logout */
+document.getElementById("logout-btn").onclick = ()=>signOut(auth);
+
+/* Start Firestore Listener ONLY after login */
+function startPostsListener(){
+  unsubscribePosts = onSnapshot(postsCol,snapshot=>{
+    postsContainer.innerHTML="";
+    snapshot.docs
+      .sort((a,b)=>b.data().createdAt?.seconds - a.data().createdAt?.seconds)
+      .forEach(docSnap=>{
+        const post = docSnap.data();
+        const postId = docSnap.id;
+
+        const div=document.createElement("div");
+        div.className="post";
+        div.innerHTML=`
+          <h3>${escapeHTML(post.title)}</h3>
+          <p>${escapeHTML(post.content)}</p>
+          <button class="reaction-btn" data-type="like">❤️ ${post.reactions?.like||0}</button>
+          <button class="reaction-btn" data-type="fire">🔥 ${post.reactions?.fire||0}</button>
+          <button class="reaction-btn" data-type="insight">💡 ${post.reactions?.insight||0}</button>
+          <div>
+            <input placeholder="Add comment"/>
+            <button>Send</button>
+          </div>
+          ${(post.comments||[]).map(c=>
+            `<p class="comment"><b>${escapeHTML(c.authorName)}:</b> ${escapeHTML(c.text)}</p>`
+          ).join("")}
+        `;
+        postsContainer.appendChild(div);
+
+        /* Reactions */
+        div.querySelectorAll(".reaction-btn").forEach(btn=>{
+          btn.onclick=()=>updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
+            [`reactions.${btn.dataset.type}`]: increment(1)
+          });
+        });
+
+        /* Comments */
+        const input = div.querySelector("input");
+        const sendBtn = div.querySelector("button:last-of-type");
+        sendBtn.onclick=()=>{
+          if(!input.value.trim()) return;
+          updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
+            comments: arrayUnion({
+              text: input.value,
+              authorName: auth.currentUser.displayName||"Anonymous",
+              authorId: auth.currentUser.uid,
+              createdAt: new Date().toISOString()
+            })
+          });
+          input.value="";
+        };
+      });
+  },err=>console.error("Firestore Error:",err));
+}
+
+/* Publish */
+document.getElementById("publish-form").onsubmit=async e=>{
+  e.preventDefault();
+  await addDoc(postsCol,{
+    title: post-title.value.trim(),
+    content: post-content.value.trim(),
+    authorId: auth.currentUser.uid,
+    authorName: auth.currentUser.displayName||"Anonymous",
+    reactions:{like:0,fire:0,insight:0},
+    comments:[],
+    createdAt: serverTimestamp()
+  });
+  publishSection.classList.add("hidden");
+  feedSection.classList.remove("hidden");
+};
+
+/* Escape HTML */
+function escapeHTML(str){
+  return str?.replace(/[&<>"']/g,m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+</script>
+</body>
+</html>
