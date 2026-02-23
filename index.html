@@ -1,52 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perspective - Feed</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { font-family: sans-serif; background: #FDFDFF; color: #111; }
-        .post-card { transition: transform 0.2s; }
-        .post-card:hover { transform: translateY(-2px); }
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pulsenet Vanilla SPA</title>
+<style>
+body { font-family: sans-serif; background:#FDFDFF; color:#111; margin:0; padding:0;}
+#app { max-width: 800px; margin:auto; padding:20px;}
+.hidden { display:none;}
+input, textarea, button { font-family:inherit; margin:5px 0; padding:8px; border-radius:5px; border:1px solid #ccc;}
+button { cursor:pointer;}
+.post { border:1px solid #ddd; padding:15px; border-radius:15px; margin-bottom:15px;}
+.reaction-btn { margin-right:10px; cursor:pointer;}
+.comment { margin-left:15px; font-size:14px;}
+</style>
 </head>
-<body class="min-h-screen">
+<body>
 
 <div id="app">
-    <!-- Header -->
-    <header class="bg-white border-b sticky top-0 z-10 px-4 py-3 flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-indigo-600 cursor-pointer" onclick="navigateTo('feed')">Perspective</h1>
-        <div id="nav-controls" class="space-x-2">
-            <!-- Buttons will be injected here -->
-        </div>
-    </header>
 
-    <!-- Main Content -->
-    <main id="main-content" class="max-w-4xl mx-auto p-4 md:p-8">
-        <div id="loading" class="text-center py-20 text-gray-500">Initializing...</div>
-        <div id="view-container"></div>
-    </main>
+<!-- AUTH -->
+<div id="auth-section">
+<h2 id="auth-title">Login</h2>
+<form id="auth-form">
+<input type="text" id="fullname" placeholder="Full Name" class="hidden"/>
+<input type="email" id="email" placeholder="Email" required/>
+<input type="password" id="password" placeholder="Password" required/>
+<button type="submit" id="auth-btn">Login</button>
+</form>
+<button id="toggle-auth">Switch to Register</button>
+<p id="auth-error" style="color:red"></p>
+</div>
+
+<!-- FEED -->
+<div id="feed-section" class="hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h1>Perspective</h1>
+<button id="logout-btn">Logout</button>
+</div>
+<button id="show-publish-btn">New Story</button>
+<button id="show-account-btn">Account</button>
+<div id="posts"></div>
+</div>
+
+<!-- PUBLISH -->
+<div id="publish-section" class="hidden">
+<h2>New Story</h2>
+<form id="publish-form">
+<input type="text" id="post-title" placeholder="Title" required/>
+<textarea id="post-content" rows="8" placeholder="Tell your story..." required></textarea>
+<button type="submit">Publish</button>
+</form>
+<button id="back-feed-btn">Back to Feed</button>
+</div>
+
+<!-- ACCOUNT -->
+<div id="account-section" class="hidden">
+<h2>Account</h2>
+<p><b>Name:</b> <span id="display-name"></span></p>
+<p><b>Email:</b> <span id="display-email"></span></p>
+<input type="text" id="edit-display-name" placeholder="New Display Name"/>
+<button id="save-display-btn">Save</button>
+<button id="back-feed-btn2">Back to Feed</button>
+</div>
+
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signOut 
+import {
+  getAuth, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, updateProfile,
+  onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { 
-  getFirestore, 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  serverTimestamp, 
-  doc, 
-  getDoc 
+import {
+  getFirestore, collection, addDoc,
+  onSnapshot, doc, updateDoc,
+  increment, serverTimestamp, arrayUnion
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-// Firebase Config
+/* FIREBASE CONFIG */
 const firebaseConfig = {
   apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
@@ -60,156 +93,188 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const appId = "pulsenet-d1fe0";
 
-// State
-let currentUser = null;
-let currentView = 'feed';
-let viewParams = {};
-let feedUnsubscribe = null;
+const postsCol = collection(db,"artifacts",appId,"public","data","posts");
 
-// DOM
-const navControls = document.getElementById('nav-controls');
-const viewContainer = document.getElementById('view-container');
-const loadingEl = document.getElementById('loading');
+/* DOM */
+const authSection = document.getElementById("auth-section");
+const feedSection = document.getElementById("feed-section");
+const publishSection = document.getElementById("publish-section");
+const accountSection = document.getElementById("account-section");
+const postsContainer = document.getElementById("posts");
+const authError = document.getElementById("auth-error");
 
-// 🔥 AUTH CHECK (NO ANONYMOUS LOGIN)
-onAuthStateChanged(auth, (user) => {
-    if(user){
-        currentUser = user;
-        loadingEl.classList.add('hidden');
-        renderNav();
-        navigateTo('feed');
+let isLogin = true;
+let unsubscribePosts = null;
+
+/* Toggle Auth */
+document.getElementById("toggle-auth").onclick = () => {
+  isLogin = !isLogin;
+  document.getElementById("auth-title").innerText = isLogin?"Login":"Register";
+  document.getElementById("auth-btn").innerText = isLogin?"Login":"Register";
+  document.getElementById("fullname").classList.toggle("hidden");
+};
+
+/* Auth Submit */
+document.getElementById("auth-form").onsubmit = async e=>{
+  e.preventDefault();
+
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const fullnameInput = document.getElementById("fullname");
+
+  try{
+    if(isLogin){
+      await signInWithEmailAndPassword(auth,emailInput.value,passwordInput.value);
     } else {
-        window.location.href = "login.html";
+      const cred = await createUserWithEmailAndPassword(auth,emailInput.value,passwordInput.value);
+      await updateProfile(cred.user,{displayName:fullnameInput.value});
     }
+    authError.innerText="";
+  }catch(err){
+    authError.innerText=err.message;
+  }
+};
+
+/* Auth State */
+onAuthStateChanged(auth,user=>{
+  if(user){
+    authSection.classList.add("hidden");
+    feedSection.classList.remove("hidden");
+    document.getElementById("display-name").innerText = user.displayName||"Anonymous";
+    document.getElementById("display-email").innerText = user.email;
+    startPostsListener();
+  } else {
+    if(unsubscribePosts) unsubscribePosts();
+    authSection.classList.remove("hidden");
+    feedSection.classList.add("hidden");
+    publishSection.classList.add("hidden");
+    accountSection.classList.add("hidden");
+  }
 });
 
-// Navigation
-window.navigateTo = (view, params = {}) => {
-    if(currentView==='feed' && view!=='feed' && feedUnsubscribe){
-        feedUnsubscribe();
-        feedUnsubscribe = null;
-    }
-    currentView=view; 
-    viewParams=params;
-    renderView();
+/* Logout */
+document.getElementById("logout-btn").onclick = ()=>signOut(auth);
+
+/* Navigation */
+document.getElementById("show-publish-btn").onclick = ()=>{
+  feedSection.classList.add("hidden");
+  publishSection.classList.remove("hidden");
 };
 
-function renderNav(){
-    navControls.innerHTML = `
-        <button onclick="navigateTo('new-story')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
-            New Story
-        </button>
-        <button onclick="handleLogout()" class="border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
-            Logout
-        </button>
-    `;
-}
-
-window.handleLogout = async () => {
-    await signOut(auth);
-    window.location.href = "login.html";
+document.getElementById("back-feed-btn").onclick = ()=>{
+  publishSection.classList.add("hidden");
+  feedSection.classList.remove("hidden");
 };
 
-// Views
-function renderView(){
-    viewContainer.innerHTML = "";
+document.getElementById("show-account-btn").onclick = ()=>{
+  feedSection.classList.add("hidden");
+  accountSection.classList.remove("hidden");
+};
 
-    switch(currentView){
-        case 'feed': renderFeed(); break;
-        case 'new-story': renderNewStory(); break;
-        case 'post-detail': renderPostDetail(viewParams.id); break;
-    }
-}
+document.getElementById("back-feed-btn2").onclick = ()=>{
+  accountSection.classList.add("hidden");
+  feedSection.classList.remove("hidden");
+};
 
-// Feed
-function renderFeed(){
-    viewContainer.innerHTML = `
-        <h2 class="text-xl font-bold mb-6">Latest Perspectives</h2>
-        <div id="posts-list" class="space-y-4"></div>
-    `;
+/* Save Display Name */
+document.getElementById("save-display-btn").onclick = async ()=>{
+  const newName = document.getElementById("edit-display-name").value.trim();
+  if(!newName) return;
+  await updateProfile(auth.currentUser,{displayName:newName});
+  document.getElementById("display-name").innerText = newName;
+  document.getElementById("edit-display-name").value="";
+};
 
-    const postsList = document.getElementById('posts-list');
-    const postsCol = collection(db,"posts");
+/* Firestore Listener */
+function startPostsListener(){
+  if(unsubscribePosts) unsubscribePosts();
 
-    feedUnsubscribe = onSnapshot(postsCol, snapshot=>{
-        const posts = snapshot.docs.map(d=>({id:d.id, ...d.data()}));
-        posts.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-
-        postsList.innerHTML = posts.length ? "" : 
-            '<p class="text-gray-500 text-center py-10">No stories yet.</p>';
-
-        posts.forEach(post=>{
-            const card = document.createElement('div');
-            card.className="post-card bg-white p-6 rounded-xl border shadow-sm cursor-pointer";
-            card.innerHTML=`
-                <h3 class="text-xl font-semibold mb-2">${escapeHtml(post.title)}</h3>
-                <p class="text-gray-600 mb-4">${escapeHtml(post.content?.slice(0,150))}...</p>
-                <div class="text-sm text-gray-400 flex justify-between">
-                    <span>${escapeHtml(post.authorName || "Anonymous")}</span>
-                </div>
-            `;
-            card.onclick = ()=>navigateTo('post-detail',{id:post.id});
-            postsList.appendChild(card);
-        });
+  unsubscribePosts = onSnapshot(postsCol,snapshot=>{
+    postsContainer.innerHTML="";
+    const docs = snapshot.docs.sort((a,b)=>{
+      return (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0);
     });
-}
 
-// New Story
-function renderNewStory(){
-    viewContainer.innerHTML=`
-        <div class="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-sm border">
-            <h2 class="text-2xl font-bold mb-6">Write a Story</h2>
-            <form id="story-form" class="space-y-4">
-                <input type="text" id="title" placeholder="Title" required class="w-full p-3 border rounded-lg">
-                <textarea id="content" rows="8" placeholder="Content" required class="w-full p-3 border rounded-lg"></textarea>
-                <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-lg">Publish</button>
-            </form>
+    docs.forEach(docSnap=>{
+      const post = docSnap.data();
+      const postId = docSnap.id;
+
+      const div=document.createElement("div");
+      div.className="post";
+
+      div.innerHTML=`
+        <h3>${escapeHTML(post.title)}</h3>
+        <p>${escapeHTML(post.content)}</p>
+        <button class="reaction-btn" data-type="like">❤️ ${post.reactions?.like||0}</button>
+        <button class="reaction-btn" data-type="fire">🔥 ${post.reactions?.fire||0}</button>
+        <button class="reaction-btn" data-type="insight">💡 ${post.reactions?.insight||0}</button>
+        <div>
+          <input placeholder="Add comment"/>
+          <button class="send-comment">Send</button>
         </div>
-    `;
+        ${(post.comments||[]).map(c=>
+          `<p class="comment"><b>${escapeHTML(c.authorName)}:</b> ${escapeHTML(c.text)}</p>`
+        ).join("")}
+      `;
 
-    document.getElementById('story-form').onsubmit=async e=>{
-        e.preventDefault();
+      postsContainer.appendChild(div);
 
-        await addDoc(collection(db,"posts"),{
-            title: document.getElementById('title').value,
-            content: document.getElementById('content').value,
-            authorId: currentUser.uid,
-            authorName: currentUser.displayName || "Anonymous",
-            createdAt: serverTimestamp()
+      div.querySelectorAll(".reaction-btn").forEach(btn=>{
+        btn.onclick=()=>updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
+          [`reactions.${btn.dataset.type}`]: increment(1)
         });
+      });
 
-        navigateTo('feed');
-    };
+      const input = div.querySelector("input");
+      const sendBtn = div.querySelector(".send-comment");
+
+      sendBtn.onclick=()=>{
+        if(!input.value.trim()) return;
+        updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
+          comments: arrayUnion({
+            text: input.value,
+            authorName: auth.currentUser.displayName||"Anonymous",
+            authorId: auth.currentUser.uid,
+            createdAt: new Date().toISOString()
+          })
+        });
+        input.value="";
+      };
+    });
+  });
 }
 
-// Post Detail
-async function renderPostDetail(id){
-    const docRef = doc(db,"posts",id);
-    const snap = await getDoc(docRef);
+/* Publish */
+document.getElementById("publish-form").onsubmit=async e=>{
+  e.preventDefault();
 
-    if(!snap.exists()){
-        viewContainer.innerHTML="<p>Post not found.</p>";
-        return;
-    }
+  const titleInput = document.getElementById("post-title");
+  const contentInput = document.getElementById("post-content");
 
-    const post = snap.data();
+  await addDoc(postsCol,{
+    title: titleInput.value.trim(),
+    content: contentInput.value.trim(),
+    authorId: auth.currentUser.uid,
+    authorName: auth.currentUser.displayName||"Anonymous",
+    reactions:{like:0,fire:0,insight:0},
+    comments:[],
+    createdAt: serverTimestamp()
+  });
 
-    viewContainer.innerHTML=`
-        <button onclick="navigateTo('feed')" class="text-indigo-600 mb-6">← Back</button>
-        <article class="bg-white p-8 rounded-2xl shadow-sm border">
-            <h2 class="text-4xl font-bold mb-4">${escapeHtml(post.title)}</h2>
-            <div class="text-gray-500 text-sm mb-8">By ${escapeHtml(post.authorName)}</div>
-            <div class="whitespace-pre-wrap">${escapeHtml(post.content)}</div>
-        </article>
-    `;
-}
+  titleInput.value="";
+  contentInput.value="";
+  publishSection.classList.add("hidden");
+  feedSection.classList.remove("hidden");
+};
 
-// Helpers
-function escapeHtml(text){
-    const div=document.createElement('div');
-    div.textContent=text;
-    return div.innerHTML;
+/* Escape HTML */
+function escapeHTML(str){
+  return str?.replace(/[&<>"']/g,m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#039;"
+  }[m]));
 }
 </script>
 </body>
