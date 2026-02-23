@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comments</title>
+<style>
+body { font-family:sans-serif; padding:20px; }
+.comment { border-bottom:1px solid #ddd; padding:10px 0; }
+#add-comment { margin-top:20px; }
+textarea { width:100%; margin-bottom:5px; }
+button { padding:8px 12px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<h1 id="post-title"></h1>
+<div id="comments-list"></div>
+
+<div id="add-comment">
+  <textarea id="comment-text" rows="3" placeholder="Add a comment..."></textarea>
+  <button id="submit-comment">Post Comment</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  authDomain: "pulsenet-d1fe0.firebaseapp.com",
+  projectId: "pulsenet-d1fe0",
+  storageBucket: "pulsenet-d1fe0.firebasestorage.app",
+  messagingSenderId: "816402062445",
+  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = "pulsenet-d1fe0";
+
+// DOM
+const postTitle = document.getElementById("post-title");
+const commentsList = document.getElementById("comments-list");
+const commentText = document.getElementById("comment-text");
+const submitCommentBtn = document.getElementById("submit-comment");
+
+let currentUser = null;
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  commentText.disabled = !user;
+  submitCommentBtn.disabled = !user;
+});
+
+// Get postId from URL
+const params = new URLSearchParams(window.location.search);
+const postId = params.get("id");
+
+async function loadComments() {
+  const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
+  if(!postDoc.exists()) return alert("Post not found!");
+  const post = postDoc.data();
+
+  postTitle.textContent = post.title;
+  commentsList.innerHTML = (post.comments||[]).map(c=>`
+    <div class="comment"><b>${c.authorName}:</b> ${c.text}</div>
+  `).join("");
+}
+
+submitCommentBtn.addEventListener("click", async () => {
+  if(!currentUser) return alert("Login to comment!");
+  const text = commentText.value.trim();
+  if(!text) return;
+  await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
+    comments: arrayUnion({authorName: currentUser.displayName||"Anonymous", text})
+  });
+  commentText.value = "";
+  loadComments();
+});
+
+loadComments();
+</script>
+</body>
+</html>
