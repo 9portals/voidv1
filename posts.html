@@ -11,8 +11,8 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 #post { border:1px solid #ddd; padding:20px; border-radius:15px; margin-bottom:20px; }
 .reaction-btn { margin-right:10px; cursor:pointer; }
 .comments { margin-top:20px; }
-.comment { border-top:1px solid #eee; padding:8px 0; }
-.comment b { margin-right:5px; }
+.comment { border-top:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; }
+.comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
 #new-comment { display:flex; gap:5px; margin-top:10px; }
 #new-comment input { flex:1; padding:8px; border:1px solid #ccc; border-radius:5px; }
 </style>
@@ -25,7 +25,6 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
     <button id="login-btn">Login / Register</button>
     <button id="account-btn">Account</button>
     <button id="logout-btn">Logout</button>
-    <button id="back-feed-btn">Back to Feed</button>
   </div>
 </header>
 
@@ -38,7 +37,6 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
     <button class="reaction-btn" data-reaction="fire">🔥 0</button>
     <button class="reaction-btn" data-reaction="insight">💡 0</button>
   </div>
-  <div class="meta" id="views">Views: 0</div>
   <div class="comments" id="comments">
     <h3>Comments</h3>
     <div id="comments-list"></div>
@@ -63,7 +61,6 @@ const firebaseConfig = {
   messagingSenderId: "816402062445",
   appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -73,19 +70,30 @@ const appId = "pulsenet-d1fe0";
 const loginBtn = document.getElementById("login-btn");
 const accountBtn = document.getElementById("account-btn");
 const logoutBtn = document.getElementById("logout-btn");
-const backFeedBtn = document.getElementById("back-feed-btn");
+const topButtons = document.getElementById("top-buttons");
 
 const titleEl = document.getElementById("title");
 const authorDateEl = document.getElementById("author-date");
 const contentEl = document.getElementById("content");
 const reactionsEl = document.getElementById("reactions");
-const viewsEl = document.getElementById("views");
 const commentsListEl = document.getElementById("comments-list");
 const newCommentDiv = document.getElementById("new-comment");
 const commentInput = document.getElementById("comment-input");
 const sendCommentBtn = document.getElementById("send-comment");
 
-// URL param
+// Toggle top buttons
+document.querySelector("header h1").addEventListener("click", () => {
+  Array.from(topButtons.children).forEach(btn => {
+    btn.style.display = btn.style.display === "none" ? "inline-block" : "none";
+  });
+});
+
+// Navigation
+loginBtn.addEventListener("click", ()=>window.location.href="login.html");
+accountBtn.addEventListener("click", ()=>window.location.href="account.html");
+logoutBtn.addEventListener("click", ()=>signOut(auth));
+
+// Get postId
 const params = new URLSearchParams(window.location.search);
 const postId = params.get("id");
 
@@ -93,45 +101,35 @@ const postId = params.get("id");
 let currentUser = null;
 onAuthStateChanged(auth,user=>{
   currentUser = user;
-  logoutBtn.style.display = user ? "inline-block" : "none";
-  accountBtn.style.display = user ? "inline-block" : "none";
-  loginBtn.style.display = user ? "none" : "inline-block";
+  reactionsEl.querySelectorAll(".reaction-btn").forEach(btn => btn.disabled = !user);
   newCommentDiv.classList.toggle("hidden", !user);
 });
 
-// Navigation
-loginBtn.onclick = ()=>window.location.href="login.html";
-accountBtn.onclick = ()=>window.location.href="account.html";
-logoutBtn.onclick = ()=>signOut(auth);
-backFeedBtn.onclick = ()=>window.location.href="index.html";
-
 // Load post
 async function loadPost(){
-  if(!postId) return alert("No post specified");
-
-  const postRef = doc(db,"artifacts",appId,"public","data","posts",postId);
-  const postSnap = await getDoc(postRef);
-
-  if(!postSnap.exists()) return alert("Post not found!");
-
-  const post = postSnap.data();
-
-  // Increment views
-  await updateDoc(postRef,{ views: increment(1) });
+  const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
+  if(!postDoc.exists()) return alert("Post not found!");
+  const post = postDoc.data();
 
   titleEl.textContent = post.title;
   contentEl.textContent = post.content;
-  const dateStr = post.createdAt?.seconds ? new Date(post.createdAt.seconds*1000).toLocaleDateString() : "";
-  authorDateEl.textContent = `By ${post.authorName || "Anonymous"} • ${dateStr}`;
-  viewsEl.textContent = `Views: ${post.views || 0}`;
+
+  // Author clickable
+  authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b>`;
+  document.querySelector(".author-name").onclick = e=>{
+    const uid = e.target.dataset.uid;
+    window.location.href = `account.html?uid=${uid}`;
+  };
 
   // Reactions
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
     const type = btn.dataset.reaction;
     btn.textContent = `${btn.textContent.split(" ")[0]} ${post.reactions?.[type]||0}`;
-    btn.onclick = async ()=>{
+    btn.onclick = async () => {
       if(!currentUser) return alert("Login to react!");
-      await updateDoc(postRef,{ [`reactions.${type}`]: increment(1) });
+      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
+        [`reactions.${type}`]: increment(1)
+      });
       loadPost();
     };
   });
@@ -142,13 +140,27 @@ async function loadPost(){
     .forEach(c=>{
       const div = document.createElement("div");
       div.className="comment";
-      div.innerHTML=`<b>${escapeHTML(c.authorName)}:</b> ${escapeHTML(c.text)}`;
+      div.innerHTML = `<b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
+      <button class="reply-btn">Reply</button>`;
+
+      // Username click → account
+      div.querySelector(".comment-user").onclick = e=>{
+        const uid = e.target.dataset.uid;
+        window.location.href = `account.html?uid=${uid}`;
+      };
+
+      // Reply click → comments.html
+      div.querySelector(".reply-btn").onclick = ()=>{
+        window.location.href = `comments.html?postId=${postId}&replyTo=${c.authorId}`;
+      };
+
       commentsListEl.appendChild(div);
     });
 }
 
 // Send new comment
 sendCommentBtn.onclick = async ()=>{
+  if(!currentUser) return alert("Login to comment!");
   const text = commentInput.value.trim();
   if(!text) return;
   const postRef = doc(db,"artifacts",appId,"public","data","posts",postId);
