@@ -5,18 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Comments / Reply</title>
 <style>
-body { font-family:sans-serif; padding:20px; }
-textarea { width:100%; margin-bottom:5px; }
-button { padding:8px 12px; cursor:pointer; margin:2px; }
+body { font-family:sans-serif; padding:20px; background:#FDFDFF; color:#111; }
+h1 { font-size: 1.5rem; margin-bottom: 20px; }
+textarea { 
+  width:100%; 
+  margin-bottom:15px; 
+  padding: 10px; 
+  border-radius: 8px; 
+  border: 1px solid #ccc; 
+  font-family: inherit;
+  box-sizing: border-box;
+}
+/* Matching Button Style */
+.btn-dark { 
+  background:#111; 
+  color:#fff; 
+  padding:10px 18px; 
+  border-radius:5px; 
+  border:1px solid #ccc; 
+  cursor:pointer; 
+  font-family:inherit;
+  margin-right: 5px;
+}
+.btn-dark:disabled { background: #666; cursor: not-allowed; }
 </style>
 </head>
 <body>
 
-<h1 id="post-title"></h1>
+<h1 id="post-title">Loading...</h1>
 <div id="add-comment">
-  <textarea id="comment-text" rows="3" placeholder="Add a comment..."></textarea>
-  <button id="submit-comment">Post Comment</button>
-  <button id="cancel-btn">Cancel</button>
+  <textarea id="comment-text" rows="5" placeholder="Write your thoughts..."></textarea>
+  <div class="actions">
+    <button id="submit-comment" class="btn-dark">Post Comment</button>
+    <button id="cancel-btn" class="btn-dark" style="background: #fff; color: #111;">Cancel</button>
+  </div>
 </div>
 
 <script type="module">
@@ -37,52 +59,51 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
-// DOM
 const postTitle = document.getElementById("post-title");
 const commentText = document.getElementById("comment-text");
 const submitCommentBtn = document.getElementById("submit-comment");
 const cancelBtn = document.getElementById("cancel-btn");
 
+const params = new URLSearchParams(window.location.search);
+const postId = params.get("postId");
+const replyTo = params.get("replyTo");
+
 let currentUser = null;
 onAuthStateChanged(auth, user => {
   currentUser = user;
-  commentText.disabled = !user;
-  submitCommentBtn.disabled = !user;
+  if(!user) {
+    commentText.placeholder = "Please login to comment";
+    commentText.disabled = true;
+    submitCommentBtn.disabled = true;
+  }
 });
 
-// URL params
-const params = new URLSearchParams(window.location.search);
-const postId = params.get("postId");
-const replyTo = params.get("replyTo") || null;
-
-// Load post title
-async function loadPostTitle(){
+async function setupPage(){
   const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
-  if(!postDoc.exists()) return alert("Post not found!");
-  const post = postDoc.data();
-  postTitle.textContent = post.title;
+  if(postDoc.exists()) postTitle.textContent = postDoc.data().title;
+  
+  if(replyTo) {
+    commentText.value = `@${replyTo} `;
+    commentText.focus();
+  }
 }
-loadPostTitle();
+setupPage();
 
-// Submit comment / reply
 submitCommentBtn.onclick = async ()=>{
-  if(!currentUser) return alert("Login to comment!");
   const text = commentText.value.trim();
-  if(!text) return;
-  const postRef = doc(db,"artifacts",appId,"public","data","posts",postId);
-  await updateDoc(postRef,{
+  if(!text || !currentUser) return;
+  
+  await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
     comments: arrayUnion({
       text,
-      authorName: currentUser.displayName||"Anonymous",
+      authorName: currentUser.displayName || "Anonymous",
       authorId: currentUser.uid,
-      replyTo: replyTo,
       createdAt: new Date().toISOString()
     })
   });
-  window.history.back(); // Go back to post page
+  window.history.back();
 };
 
-// Cancel
 cancelBtn.onclick = ()=>window.history.back();
 </script>
 </body>
