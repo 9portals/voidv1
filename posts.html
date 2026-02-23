@@ -7,27 +7,22 @@
 <style>
 body { font-family:sans-serif; background:#FDFDFF; color:#111; margin:0; padding:20px; }
 header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+/* Standardized Button Style */
+.btn-dark { background:#111; color:#fff; padding:8px 12px; border-radius:5px; border:1px solid #ccc; cursor:pointer; font-family:inherit; text-decoration: none; display: inline-block; }
 button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border:none; font-family:inherit; display:none; }
-#post { border:1px solid #ddd; padding:20px; border-radius:15px; margin-bottom:20px; }
-.reaction-btn { margin-right:10px; cursor:pointer; }
-.comments { margin-top:20px; }
-.comment { border-top:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; }
-.comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
-#add-comment-btn, #back-btn { margin-top:10px; padding:8px 12px; border-radius:5px; border:1px solid #ccc; background:#111; color:#fff; cursor:pointer; display:none; }
-.reply-btn { margin-left:5px; padding:2px 6px; border-radius:4px; cursor:pointer; background: #eee; border: 1px solid #ccc; }
 
-/* New UI Styles */
-#comment-ui { margin-top: 15px; display: none; flex-direction: column; gap: 10px; border-top: 2px solid #eee; padding-top: 15px; }
-#comment-text { width: 100%; height: 80px; border-radius: 8px; border: 1px solid #ccc; padding: 10px; box-sizing: border-box; font-family: inherit; }
-.comment-actions { display: flex; gap: 10px; }
-#submit-comment-btn { background: #007bff; color: white; padding: 8px 16px; border-radius: 5px; border: none; cursor: pointer; }
-#cancel-comment-btn { background: #eee; color: #333; padding: 8px 16px; border-radius: 5px; border: none; cursor: pointer; }
+#post { border:1px solid #ddd; padding:20px; border-radius:15px; margin-bottom:20px; }
+.reaction-btn { margin-right:10px; cursor:pointer; display: inline-block; }
+.comments { margin-top:20px; }
+.comment { border-top:1px solid #eee; padding:12px 0; display:flex; justify-content:space-between; align-items:center; }
+.comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
+#add-comment-btn, #back-btn { margin-top:10px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1 style="cursor:pointer">Perspective</h1>
+  <h1>Perspective</h1>
   <div id="top-buttons">
     <button id="login-btn">Login / Register</button>
     <button id="account-btn">Account</button>
@@ -44,27 +39,18 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
     <button class="reaction-btn" data-reaction="fire">🔥 0</button>
     <button class="reaction-btn" data-reaction="insight">💡 0</button>
   </div>
-
   <div class="comments" id="comments">
     <h3>Comments</h3>
     <div id="comments-list"></div>
-    <button id="add-comment-btn">Add Comment</button>
-
-    <div id="comment-ui">
-      <textarea id="comment-text" placeholder="Write your thoughts..."></textarea>
-      <div class="comment-actions">
-        <button id="submit-comment-btn" style="display:inline-block">Post Comment</button>
-        <button id="cancel-comment-btn" style="display:inline-block">Cancel</button>
-      </div>
-    </div>
+    <button id="add-comment-btn" class="btn-dark">Add Comment</button>
   </div>
-  <button id="back-btn" style="display:inline-block">Back</button>
+  <button id="back-btn" class="btn-dark" style="display:inline-block">Back</button>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, updateDoc, increment, arrayUnion } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
@@ -79,12 +65,10 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
-// DOM
 const loginBtn = document.getElementById("login-btn");
 const accountBtn = document.getElementById("account-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const topButtons = document.getElementById("top-buttons");
-
 const titleEl = document.getElementById("title");
 const authorDateEl = document.getElementById("author-date");
 const contentEl = document.getElementById("content");
@@ -93,38 +77,26 @@ const commentsListEl = document.getElementById("comments-list");
 const addCommentBtn = document.getElementById("add-comment-btn");
 const backBtn = document.getElementById("back-btn");
 
-// Comment UI DOM
-const commentUi = document.getElementById("comment-ui");
-const commentText = document.getElementById("comment-text");
-const submitCommentBtn = document.getElementById("submit-comment-btn");
-const cancelCommentBtn = document.getElementById("cancel-comment-btn");
-
-// Toggle top buttons
-document.querySelector("header h1").addEventListener("click", () => {
+document.querySelector("header h1").onclick = () => {
   Array.from(topButtons.children).forEach(btn => {
     btn.style.display = btn.style.display === "none" ? "inline-block" : "none";
   });
-});
+};
 
-// Navigation
 loginBtn.onclick = ()=>window.location.href="login.html";
 accountBtn.onclick = ()=>window.location.href="account.html";
 logoutBtn.onclick = ()=>signOut(auth);
 backBtn.onclick = ()=>window.history.back();
 
-// Get postId
 const params = new URLSearchParams(window.location.search);
 const postId = params.get("id");
 
-// Auth state
 let currentUser = null;
-onAuthStateChanged(auth,user=>{
+onAuthStateChanged(auth, user=>{
   currentUser = user;
-  reactionsEl.querySelectorAll(".reaction-btn").forEach(btn => btn.disabled = !user);
   addCommentBtn.style.display = user ? "inline-block" : "none";
 });
 
-// Load post
 async function loadPost(){
   const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
   if(!postDoc.exists()) return alert("Post not found!");
@@ -132,101 +104,42 @@ async function loadPost(){
 
   titleEl.textContent = post.title;
   contentEl.textContent = post.content;
-
-  // Author clickable
   authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b>`;
-  document.querySelector(".author-name").onclick = e=>{
-    const uid = e.target.dataset.uid;
-    window.location.href = `account.html?uid=${uid}`;
-  };
 
-  // Post reactions
+  // Reactions
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
     const type = btn.dataset.reaction;
     btn.textContent = `${btn.textContent.split(" ")[0]} ${post.reactions?.[type]||0}`;
     btn.onclick = async () => {
       if(!currentUser) return alert("Login to react!");
-      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-        [`reactions.${type}`]: increment(1)
-      });
+      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{ [`reactions.${type}`]: increment(1) });
       loadPost();
     };
   });
 
-  // Comments
+  // Comments List
   commentsListEl.innerHTML = "";
   (post.comments || []).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt))
     .forEach(c=>{
       const div = document.createElement("div");
       div.className="comment";
-      div.innerHTML = `<span><b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}</span>
-        <button class="reply-btn">Reply</button>`;
+      div.innerHTML = `
+        <div>
+          <b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
+        </div>
+        <button class="reply-btn btn-dark" style="display:inline-block; font-size: 0.8em; padding: 4px 8px;">Reply</button>`;
 
-      // Username click → account
-      div.querySelector(".comment-user").onclick = e=>{
-        const uid = e.target.dataset.uid;
-        window.location.href = `account.html?uid=${uid}`;
-      };
-
-      // Reply click → Open UI with @handle
       div.querySelector(".reply-btn").onclick = ()=>{
-        if(!currentUser) return alert("Login to reply!");
-        showCommentUi(`@${c.authorName} `);
+        window.location.href = `comments.html?postId=${postId}&replyTo=${encodeURIComponent(c.authorName)}`;
       };
-
       commentsListEl.appendChild(div);
     });
 }
 
-// Show/Hide Comment UI
-function showCommentUi(initialText = ""){
-  commentUi.style.display = "flex";
-  addCommentBtn.style.display = "none";
-  commentText.value = initialText;
-  commentText.focus();
-}
-
-cancelCommentBtn.onclick = () => {
-  commentUi.style.display = "none";
-  addCommentBtn.style.display = "inline-block";
-  commentText.value = "";
-};
-
-addCommentBtn.onclick = () => {
-  showCommentUi();
-};
-
-submitCommentBtn.onclick = async () => {
-  const text = commentText.value.trim();
-  if(!text) return;
-  if(!currentUser) return alert("Please login first.");
-
-  const newComment = {
-    authorId: currentUser.uid,
-    authorName: currentUser.displayName || "Anonymous",
-    text: text,
-    createdAt: new Date().toISOString()
-  };
-
-  try {
-    await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId), {
-      comments: arrayUnion(newComment)
-    });
-    commentText.value = "";
-    commentUi.style.display = "none";
-    addCommentBtn.style.display = "inline-block";
-    loadPost();
-  } catch(e) {
-    console.error(e);
-    alert("Error posting comment.");
-  }
-};
+addCommentBtn.onclick = () => window.location.href = `comments.html?postId=${postId}`;
 
 function escapeHTML(str){
-  return str?.replace(/[&<>"']/g,m=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",
-    '"':"&quot;","'":"&#039;"
-  }[m]));
+  return str?.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
 
 loadPost();
