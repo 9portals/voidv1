@@ -11,8 +11,8 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 #post { border:1px solid #ddd; padding:20px; border-radius:15px; margin-bottom:20px; }
 .reaction-btn { margin-right:10px; cursor:pointer; }
 .comments { margin-top:20px; }
-.comment { border-top:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; }
-.comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
+.comment { border-top:1px solid #eee; padding:8px 0; }
+.comment b { margin-right:5px; }
 #new-comment { display:flex; gap:5px; margin-top:10px; }
 #new-comment input { flex:1; padding:8px; border:1px solid #ccc; border-radius:5px; }
 </style>
@@ -122,14 +122,7 @@ async function loadPost(){
   titleEl.textContent = post.title;
   contentEl.textContent = post.content;
   const dateStr = post.createdAt?.seconds ? new Date(post.createdAt.seconds*1000).toLocaleDateString() : "";
-
-  // Author clickable
-  authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b> • ${dateStr}`;
-  document.querySelector(".author-name").onclick = e=>{
-    const uid = e.target.dataset.uid;
-    window.location.href = `account.html?uid=${uid}`;
-  };
-
+  authorDateEl.textContent = `By ${post.authorName || "Anonymous"} • ${dateStr}`;
   viewsEl.textContent = `Views: ${post.views || 0}`;
 
   // Reactions
@@ -149,20 +142,7 @@ async function loadPost(){
     .forEach(c=>{
       const div = document.createElement("div");
       div.className="comment";
-      div.innerHTML=`<b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)} 
-      <button class="reply-btn">Reply</button>`;
-      
-      // Username click → account
-      div.querySelector(".comment-user").onclick = e=>{
-        const uid = e.target.dataset.uid;
-        window.location.href = `account.html?uid=${uid}`;
-      };
-
-      // Reply click → comments.html
-      div.querySelector(".reply-btn").onclick = ()=>{
-        window.location.href = `comments.html?postId=${postId}&replyTo=${c.authorId}`;
-      };
-
+      div.innerHTML=`<b>${escapeHTML(c.authorName)}:</b> ${escapeHTML(c.text)}`;
       commentsListEl.appendChild(div);
     });
 }
