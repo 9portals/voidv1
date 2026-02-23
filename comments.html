@@ -5,39 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Comments / Reply</title>
 <style>
-body { font-family:sans-serif; padding:20px; background:#FDFDFF; color:#111; }
-h1 { font-size: 1.5rem; margin-bottom: 20px; }
-textarea { 
-  width:100%; 
-  margin-bottom:15px; 
-  padding: 10px; 
-  border-radius: 8px; 
-  border: 1px solid #ccc; 
-  font-family: inherit;
-  box-sizing: border-box;
-}
-/* Matching Button Style */
-.btn-dark { 
-  background:#111; 
-  color:#fff; 
-  padding:10px 18px; 
-  border-radius:5px; 
-  border:1px solid #ccc; 
-  cursor:pointer; 
-  font-family:inherit;
-  margin-right: 5px;
-}
-.btn-dark:disabled { background: #666; cursor: not-allowed; }
+  body { font-family: sans-serif; background: #FDFDFF; color: #111; padding: 40px 20px; margin: 0; display: flex; justify-content: center; }
+  #container { max-width: 600px; width: 100%; }
+  
+  h1 { font-size: 1.4rem; margin-bottom: 10px; }
+  #reply-context { color: #666; margin-bottom: 20px; font-size: 0.9rem; }
+  
+  textarea { 
+    width: 100%; 
+    padding: 15px; 
+    border-radius: 10px; 
+    border: 1px solid #ddd; 
+    font-family: inherit; 
+    font-size: 1rem; 
+    box-sizing: border-box; 
+    margin-bottom: 15px;
+    resize: vertical;
+    min-height: 120px;
+  }
+
+  /* Your Requested Button Style */
+  .btn-dark { 
+    background: #111; 
+    color: #fff; 
+    padding: 10px 20px; 
+    border-radius: 5px; 
+    border: 1px solid #ccc; 
+    cursor: pointer; 
+    font-family: inherit; 
+    font-size: 0.9rem;
+    display: inline-block;
+    transition: opacity 0.2s;
+  }
+  .btn-dark:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .btn-outline {
+    background: transparent;
+    color: #111;
+    border: 1px solid #ccc;
+    margin-left: 10px;
+  }
+
+  .actions { display: flex; align-items: center; }
 </style>
 </head>
 <body>
 
-<h1 id="post-title">Loading...</h1>
-<div id="add-comment">
-  <textarea id="comment-text" rows="5" placeholder="Write your thoughts..."></textarea>
-  <div class="actions">
-    <button id="submit-comment" class="btn-dark">Post Comment</button>
-    <button id="cancel-btn" class="btn-dark" style="background: #fff; color: #111;">Cancel</button>
+<div id="container">
+  <h1 id="post-title">Loading post...</h1>
+  <p id="reply-context"></p>
+
+  <div id="add-comment">
+    <textarea id="comment-text" placeholder="Write your thoughts..."></textarea>
+    <div class="actions">
+      <button id="submit-comment" class="btn-dark">Post Comment</button>
+      <button id="cancel-btn" class="btn-dark btn-outline">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -54,57 +77,87 @@ const firebaseConfig = {
   messagingSenderId: "816402062445",
   appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
 };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
+// DOM
 const postTitle = document.getElementById("post-title");
+const replyContext = document.getElementById("reply-context");
 const commentText = document.getElementById("comment-text");
 const submitCommentBtn = document.getElementById("submit-comment");
 const cancelBtn = document.getElementById("cancel-btn");
 
+// URL Params
 const params = new URLSearchParams(window.location.search);
 const postId = params.get("postId");
-const replyTo = params.get("replyTo");
+const replyTo = params.get("replyTo"); // Author name being replied to
 
 let currentUser = null;
+
+// Auth Check
 onAuthStateChanged(auth, user => {
   currentUser = user;
-  if(!user) {
-    commentText.placeholder = "Please login to comment";
+  if (!user) {
+    commentText.placeholder = "Please login to post a comment.";
     commentText.disabled = true;
     submitCommentBtn.disabled = true;
   }
 });
 
-async function setupPage(){
-  const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
-  if(postDoc.exists()) postTitle.textContent = postDoc.data().title;
-  
-  if(replyTo) {
+// Load Page Data
+async function init() {
+  if (!postId) return alert("No post selected.");
+
+  // Fetch title
+  const postDoc = await getDoc(doc(db, "artifacts", appId, "public", "data", "posts", postId));
+  if (postDoc.exists()) {
+    postTitle.textContent = postDoc.data().title;
+  }
+
+  // If this is a reply, pre-fill text
+  if (replyTo) {
+    replyContext.textContent = `Replying to ${replyTo}`;
     commentText.value = `@${replyTo} `;
     commentText.focus();
+  } else {
+    replyContext.textContent = `Adding a new comment`;
   }
 }
-setupPage();
 
-submitCommentBtn.onclick = async ()=>{
+// Submit logic
+submitCommentBtn.onclick = async () => {
   const text = commentText.value.trim();
-  if(!text || !currentUser) return;
-  
-  await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-    comments: arrayUnion({
-      text,
-      authorName: currentUser.displayName || "Anonymous",
-      authorId: currentUser.uid,
-      createdAt: new Date().toISOString()
-    })
-  });
-  window.history.back();
+  if (!text || !currentUser) return;
+
+  submitCommentBtn.disabled = true;
+  submitCommentBtn.textContent = "Posting...";
+
+  try {
+    const postRef = doc(db, "artifacts", appId, "public", "data", "posts", postId);
+    await updateDoc(postRef, {
+      comments: arrayUnion({
+        text: text,
+        authorName: currentUser.displayName || "Anonymous",
+        authorId: currentUser.uid,
+        createdAt: new Date().toISOString(),
+        replyTo: replyTo || null
+      })
+    });
+    window.history.back(); // Return to post
+  } catch (e) {
+    console.error(e);
+    alert("Error saving comment.");
+    submitCommentBtn.disabled = false;
+    submitCommentBtn.textContent = "Post Comment";
+  }
 };
 
-cancelBtn.onclick = ()=>window.history.back();
+cancelBtn.onclick = () => window.history.back();
+
+init();
 </script>
 </body>
 </html>
