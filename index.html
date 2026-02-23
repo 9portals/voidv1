@@ -15,7 +15,15 @@ button { cursor:pointer;}
 .meta { font-size:13px; color:#666; margin-bottom:8px;}
 .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
 .preview-text { margin:10px 0; }
-.read-btn { background:#111; color:white; border:none; padding:6px 12px; border-radius:6px;}
+
+/* SAME STYLE FOR HEADER BUTTONS */
+.read-btn {
+  background:#111;
+  color:white;
+  border:none;
+  padding:6px 12px;
+  border-radius:6px;
+}
 </style>
 </head>
 <body>
@@ -41,10 +49,10 @@ button { cursor:pointer;}
 <div class="header-bar">
 <h1>Perspective</h1>
 <div>
-<button id="show-publish-btn" class="hidden">New Story</button>
-<button id="show-account-btn" class="hidden">Account</button>
-<button id="logout-btn" class="hidden">Logout</button>
-<button id="login-btn" class="hidden">Login</button>
+<button id="show-publish-btn" class="hidden read-btn">New Story</button>
+<button id="show-account-btn" class="hidden read-btn">Account</button>
+<button id="logout-btn" class="hidden read-btn">Logout</button>
+<button id="login-btn" class="hidden read-btn">Login</button>
 </div>
 </div>
 
@@ -164,19 +172,14 @@ loginBtn.onclick = ()=>{
   authSection.classList.remove("hidden");
 };
 
-/* NEW STORY NAV */
+/* New Story */
 showPublishBtn.onclick = ()=>{
   window.location.href = "new.html";
 };
 
+/* Account button → edit.html */
 showAccountBtn.onclick = ()=>{
-  feedSection.classList.add("hidden");
-  accountSection.classList.remove("hidden");
-};
-
-document.getElementById("back-feed-btn2").onclick = ()=>{
-  accountSection.classList.add("hidden");
-  feedSection.classList.remove("hidden");
+  window.location.href = "edit.html";
 };
 
 /* POSTS LISTENER */
@@ -207,7 +210,9 @@ function startPostsListener(){
 
       div.innerHTML = `
         <div class="meta">
-          <b>${escapeHTML(post.authorName||"Anonymous")}</b> • ${date}
+          <b class="author-link" data-uid="${post.authorId||""}" style="cursor:pointer;">
+            ${escapeHTML(post.authorName||"Anonymous")}
+          </b> • ${date}
         </div>
         <h3>${escapeHTML(post.title)}</h3>
         <p class="preview-text">${escapeHTML(preview)}</p>
@@ -224,6 +229,16 @@ function startPostsListener(){
       div.querySelector(".read-btn").onclick = ()=>{
         window.location.href = "posts.html?id="+postId;
       };
+
+      /* Username click → account.html */
+      const authorLink = div.querySelector(".author-link");
+      if(authorLink){
+        authorLink.onclick = ()=>{
+          if(authorLink.dataset.uid){
+            window.location.href = "account.html?uid="+authorLink.dataset.uid;
+          }
+        };
+      }
     });
   });
 }
