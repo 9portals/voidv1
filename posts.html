@@ -14,6 +14,7 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 .comment { border-top:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; }
 .comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
 #add-comment-btn, #back-btn { margin-top:10px; padding:8px 12px; border-radius:5px; border:1px solid #ccc; background:#111; color:#fff; cursor:pointer; display:none; }
+.reply-btn { margin-left:5px; padding:2px 6px; border-radius:4px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -47,7 +48,7 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, updateDoc, increment, arrayUnion } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
@@ -117,7 +118,7 @@ async function loadPost(){
     window.location.href = `account.html?uid=${uid}`;
   };
 
-  // Reactions
+  // Post reactions
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
     const type = btn.dataset.reaction;
     btn.textContent = `${btn.textContent.split(" ")[0]} ${post.reactions?.[type]||0}`;
@@ -137,9 +138,7 @@ async function loadPost(){
       const div = document.createElement("div");
       div.className="comment";
       div.innerHTML = `<b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
-      <button class="reply-btn">Reply</button>
-      <button class="like-comment-btn">❤️ ${c.likes||0}</button>
-      <button class="burn-comment-btn">🔥 ${c.burns||0}</button>`;
+        <button class="reply-btn">Reply</button>`;
 
       // Username click → account
       div.querySelector(".comment-user").onclick = e=>{
@@ -150,26 +149,6 @@ async function loadPost(){
       // Reply click → comments.html
       div.querySelector(".reply-btn").onclick = ()=>{
         window.location.href = `comments.html?postId=${postId}&replyTo=${c.authorId}`;
-      };
-
-      // Like comment
-      div.querySelector(".like-comment-btn").onclick = async ()=>{
-        if(!currentUser) return alert("Login to react!");
-        const index = post.comments.findIndex(x=>x.authorId===c.authorId && x.text===c.text);
-        if(index<0) return;
-        post.comments[index].likes = (post.comments[index].likes||0)+1;
-        await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: post.comments});
-        loadPost();
-      };
-
-      // Burn comment
-      div.querySelector(".burn-comment-btn").onclick = async ()=>{
-        if(!currentUser) return alert("Login to react!");
-        const index = post.comments.findIndex(x=>x.authorId===c.authorId && x.text===c.text);
-        if(index<0) return;
-        post.comments[index].burns = (post.comments[index].burns||0)+1;
-        await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: post.comments});
-        loadPost();
       };
 
       commentsListEl.appendChild(div);
