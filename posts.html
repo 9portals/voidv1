@@ -7,15 +7,25 @@
 <style>
 body { font-family:sans-serif; background:#FDFDFF; color:#111; margin:0; padding:20px; }
 header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+
 /* Standardized Button Style */
 .btn-dark { background:#111; color:#fff; padding:8px 12px; border-radius:5px; border:1px solid #ccc; cursor:pointer; font-family:inherit; text-decoration: none; display: inline-block; }
 button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border:none; font-family:inherit; display:none; }
 
 #post { border:1px solid #ddd; padding:20px; border-radius:15px; margin-bottom:20px; }
 .reaction-btn { margin-right:10px; cursor:pointer; display: inline-block; }
+
 .comments { margin-top:20px; }
 .comment { border-top:1px solid #eee; padding:12px 0; display:flex; justify-content:space-between; align-items:center; }
-.comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
+
+/* Username styling — black, no underline */
+.username {
+  cursor:pointer;
+  color:#111;
+  text-decoration:none;
+  font-weight:bold;
+}
+
 #add-comment-btn, #back-btn { margin-top:10px; }
 </style>
 </head>
@@ -34,16 +44,19 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
   <h2 id="title"></h2>
   <p id="author-date" class="meta"></p>
   <p id="content"></p>
+
   <div id="reactions">
     <button class="reaction-btn" data-reaction="like">❤️ 0</button>
     <button class="reaction-btn" data-reaction="fire">🔥 0</button>
     <button class="reaction-btn" data-reaction="insight">💡 0</button>
   </div>
+
   <div class="comments" id="comments">
     <h3>Comments</h3>
     <div id="comments-list"></div>
     <button id="add-comment-btn" class="btn-dark">Add Comment</button>
   </div>
+
   <button id="back-btn" class="btn-dark" style="display:inline-block">Back</button>
 </div>
 
@@ -53,13 +66,14 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, doc, getDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  apiKey: "YOUR_KEY",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
   projectId: "pulsenet-d1fe0",
   storageBucket: "pulsenet-d1fe0.firebasestorage.app",
   messagingSenderId: "816402062445",
   appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
 };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -69,6 +83,7 @@ const loginBtn = document.getElementById("login-btn");
 const accountBtn = document.getElementById("account-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const topButtons = document.getElementById("top-buttons");
+
 const titleEl = document.getElementById("title");
 const authorDateEl = document.getElementById("author-date");
 const contentEl = document.getElementById("content");
@@ -104,7 +119,16 @@ async function loadPost(){
 
   titleEl.textContent = post.title;
   contentEl.textContent = post.content;
-  authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b>`;
+
+  authorDateEl.innerHTML = `
+    By <span class="username author-name" data-uid="${post.authorId}">
+    ${escapeHTML(post.authorName || "Anonymous")}
+    </span>`;
+
+  // Author click
+  document.querySelector(".author-name").onclick = function(){
+    window.location.href = `account.html?uid=${this.dataset.uid}`;
+  };
 
   // Reactions
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
@@ -117,23 +141,30 @@ async function loadPost(){
     };
   });
 
-  // Comments List
   commentsListEl.innerHTML = "";
   (post.comments || []).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt))
-    .forEach(c=>{
-      const div = document.createElement("div");
-      div.className="comment";
-      div.innerHTML = `
-        <div>
-          <b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
-        </div>
-        <button class="reply-btn btn-dark" style="display:inline-block; font-size: 0.8em; padding: 4px 8px;">Reply</button>`;
+  .forEach(c=>{
+    const div = document.createElement("div");
+    div.className="comment";
+    div.innerHTML = `
+      <div>
+        <span class="username comment-user" data-uid="${c.authorId}">
+          ${escapeHTML(c.authorName)}
+        </span>: ${escapeHTML(c.text)}
+      </div>
+      <button class="reply-btn btn-dark" style="display:inline-block; font-size: 0.8em; padding: 4px 8px;">Reply</button>
+    `;
 
-      div.querySelector(".reply-btn").onclick = ()=>{
-        window.location.href = `comments.html?postId=${postId}&replyTo=${encodeURIComponent(c.authorName)}`;
-      };
-      commentsListEl.appendChild(div);
-    });
+    div.querySelector(".reply-btn").onclick = ()=>{
+      window.location.href = `comments.html?postId=${postId}&replyTo=${encodeURIComponent(c.authorName)}`;
+    };
+
+    div.querySelector(".comment-user").onclick = function(){
+      window.location.href = `account.html?uid=${this.dataset.uid}`;
+    };
+
+    commentsListEl.appendChild(div);
+  });
 }
 
 addCommentBtn.onclick = () => window.location.href = `comments.html?postId=${postId}`;
