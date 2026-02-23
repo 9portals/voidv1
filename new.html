@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulsenet - New Story</title>
+<style>
+body { font-family:sans-serif; background:#FDFDFF; color:#111; margin:0; padding:20px; }
+form { max-width:600px; margin:auto; display:flex; flex-direction:column; gap:10px; }
+input, textarea, button { font-family:inherit; padding:10px; border-radius:8px; border:1px solid #ccc; }
+button { cursor:pointer; }
+@media(max-width:600px){ body{padding:10px;} form{width:100%;} }
+</style>
+</head>
+<body>
+
+<h2>New Story</h2>
+
+<form id="publish-form">
+  <input type="text" id="post-title" placeholder="Stunning Title" required />
+  <textarea id="post-content" placeholder="Tell your story..." rows="10" required></textarea>
+  <button type="submit">Publish Globally</button>
+</form>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  authDomain: "pulsenet-d1fe0.firebaseapp.com",
+  projectId: "pulsenet-d1fe0",
+  storageBucket: "pulsenet-d1fe0.firebasestorage.app",
+  messagingSenderId: "816402062445",
+  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = "pulsenet-d1fe0";
+
+// DOM
+const publishForm = document.getElementById("publish-form");
+const postTitle = document.getElementById("post-title");
+const postContent = document.getElementById("post-content");
+
+// Auth guard: redirect if not logged in
+let currentUser = null;
+onAuthStateChanged(auth,user=>{
+  if(!user){
+    window.location.href = "login.html";
+  } else {
+    currentUser = user;
+  }
+});
+
+// Handle Publish
+publishForm.addEventListener("submit", async e=>{
+  e.preventDefault();
+  if(!currentUser) return alert("Login to publish");
+
+  const title = postTitle.value.trim();
+  const content = postContent.value.trim();
+  if(!title || !content) return alert("Title and content required");
+
+  try {
+    await addDoc(collection(db,"artifacts",appId,"public","data","posts"),{
+      title,
+      content,
+      authorId: currentUser.uid,
+      authorName: currentUser.displayName || "Anonymous",
+      reactions: { like:0, fire:0, insight:0 },
+      comments: [],
+      createdAt: serverTimestamp()
+    });
+
+    // Clear form
+    postTitle.value="";
+    postContent.value="";
+
+    // Redirect to feed
+    window.location.href = "index.html";
+  } catch(err){
+    alert("Error publishing post: " + err.message);
+  }
+});
+</script>
+
+</body>
+</html>
