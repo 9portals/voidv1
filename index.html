@@ -1,80 +1,271 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VOID</title>
-  <style>
-    body {
-      margin: 0;
-      background-color: black;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-
-    header {
-      background-color: #111;
-      padding: 1em;
-    }
-
-    nav {
-      display: flex;
-      justify-content: center;
-      gap: 1.5em;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
-
-    nav a {
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
-    }
-
-    nav a:hover {
-      text-decoration: underline;
-    }
-
-    h1 {
-      margin-top: 2em;
-      font-size: 2em;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perspective - Feed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: sans-serif; background: #FDFDFF; color: #111; }
+        .post-card { transition: transform 0.2s; }
+        .post-card:hover { transform: translateY(-2px); }
+    </style>
 </head>
-<body>
-  <header>
-    <h1>VOID</h1>
-    <nav>
-      <a href="index.html">Home</a>
-      <a href="concepts.html">Concepts</a>
-      <a href="vault.html">Vault</a>
-    </nav>
-  </header>
+<body class="min-h-screen">
 
-  <main>
-    <h1>Welcome to The Void</h1>
-    <p>Explore concepts, interact, and contribute anonymously or by signing in.</p>
-  </main>
+<div id="app">
+    <!-- Header -->
+    <header class="bg-white border-b sticky top-0 z-10 px-4 py-3 flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-indigo-600 cursor-pointer" onclick="navigateTo('feed')">Perspective</h1>
+        <div id="nav-controls" class="space-x-2">
+            <!-- Buttons will be injected here -->
+        </div>
+    </header>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+    <!-- Main Content -->
+    <main id="main-content" class="max-w-4xl mx-auto p-4 md:p-8">
+        <div id="loading" class="text-center py-20 text-gray-500">Initializing...</div>
+        <div id="view-container"></div>
+    </main>
+</div>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyD1YgjFsxh-xZfeHlrxt_0igmH6SBIMcuc",
-      authDomain: "void-d9ec4.firebaseapp.com",
-      databaseURL: "https://void-d9ec4-default-rtdb.firebaseio.com",
-      projectId: "void-d9ec4",
-      storageBucket: "void-d9ec4.firebasestorage.app",
-      messagingSenderId: "267268035851",
-      appId: "1:267268035851:web:90c7599ebda9ddd50f3e0e",
-      measurementId: "G-JBD62TD5F5"
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+// 1. Setup Environment Variables
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'pulsenet-d1fe0';
+
+// State Management
+let currentUser = null;
+let currentView = 'feed';
+let viewParams = {};
+let feedUnsubscribe = null;
+
+// UI Elements
+const navControls = document.getElementById('nav-controls');
+const viewContainer = document.getElementById('view-container');
+const loadingEl = document.getElementById('loading');
+
+// 2. Authentication Logic (Rule 3)
+async function initAuth() {
+    try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
+    } catch (err) {
+        console.error("Auth failed", err);
+        renderError("Authentication failed. Please refresh.");
+    }
+}
+
+// Watch for auth state changes and manage view transitions
+onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    renderNav();
+    
+    if (user) {
+        loadingEl.classList.add('hidden');
+        // Start from feed view once authenticated
+        navigateTo('feed');
+    } else {
+        // If logged out, stop any active listeners
+        if (feedUnsubscribe) {
+            feedUnsubscribe();
+            feedUnsubscribe = null;
+        }
+        loadingEl.classList.remove('hidden');
+        loadingEl.textContent = "Please sign in...";
+        viewContainer.innerHTML = "";
+    }
+});
+
+// Navigation Logic (SPA style)
+window.navigateTo = (view, params = {}) => {
+    // Cleanup active feed listener when leaving feed view
+    if (currentView === 'feed' && view !== 'feed' && feedUnsubscribe) {
+        feedUnsubscribe();
+        feedUnsubscribe = null;
+    }
+    
+    currentView = view;
+    viewParams = params;
+    renderView();
+};
+
+function renderNav() {
+    if (!currentUser) {
+        navControls.innerHTML = `<span class="text-sm text-gray-400">Connecting...</span>`;
+        return;
+    }
+    
+    navControls.innerHTML = `
+        <button onclick="navigateTo('new-story')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">New Story</button>
+        <button onclick="handleLogout()" class="border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Logout</button>
+    `;
+}
+
+window.handleLogout = () => signOut(auth);
+
+// Views
+function renderView() {
+    // Only render views if we have a user (Rule 3 guard)
+    if (!currentUser) return;
+
+    viewContainer.innerHTML = "";
+    
+    switch(currentView) {
+        case 'feed':
+            renderFeed();
+            break;
+        case 'new-story':
+            renderNewStory();
+            break;
+        case 'post-detail':
+            renderPostDetail(viewParams.id);
+            break;
+    }
+}
+
+// 3. Firestore Logic (Rule 1 & 2)
+function renderFeed() {
+    viewContainer.innerHTML = `<h2 class="text-xl font-bold mb-6">Latest Perspectives</h2><div id="posts-list" class="space-y-4"></div>`;
+    const postsList = document.getElementById('posts-list');
+    
+    // Ensure we don't start multiple listeners
+    if (feedUnsubscribe) feedUnsubscribe();
+
+    const postsCol = collection(db, "artifacts", appId, "public", "data", "posts");
+    
+    // Rule 3: This listener is only set up inside renderView() which is gated by currentUser
+    feedUnsubscribe = onSnapshot(postsCol, (snapshot) => {
+        const posts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Rule 2: Sort in memory to avoid index requirements
+        posts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        
+        postsList.innerHTML = posts.length ? "" : '<p class="text-gray-500 text-center py-10">No stories yet. Be the first!</p>';
+        
+        posts.forEach(post => {
+            const card = document.createElement('div');
+            card.className = "post-card bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer";
+            card.innerHTML = `
+                <h3 class="text-xl font-semibold mb-2 text-gray-800">${escapeHtml(post.title || 'Untitled')}</h3>
+                <p class="text-gray-600 mb-4 line-clamp-3">${escapeHtml(post.content || '')}</p>
+                <div class="flex items-center text-sm text-gray-400 justify-between">
+                    <span>${escapeHtml(post.authorName || 'Anonymous')}</span>
+                    <span>${(post.comments || []).length} comments</span>
+                </div>
+            `;
+            card.onclick = () => navigateTo('post-detail', { id: post.id });
+            postsList.appendChild(card);
+        });
+    }, (err) => {
+        console.error("Feed error:", err);
+        postsList.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded">Error: ${err.message}. Please check if you are signed in.</div>`;
+    });
+}
+
+function renderNewStory() {
+    viewContainer.innerHTML = `
+        <div class="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-sm border">
+            <h2 class="text-2xl font-bold mb-6">Write a Story</h2>
+            <form id="story-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                    <input type="text" id="title" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Content</label>
+                    <textarea id="content" rows="8" required class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+                </div>
+                <div class="flex space-x-3 pt-4">
+                    <button type="submit" id="submit-story" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">Publish</button>
+                    <button type="button" onclick="navigateTo('feed')" class="text-gray-500 px-6 py-2">Cancel</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    document.getElementById('story-form').onsubmit = async (e) => {
+        e.preventDefault();
+        if (!currentUser) return;
+
+        const btn = document.getElementById('submit-story');
+        btn.disabled = true;
+        btn.textContent = "Publishing...";
+
+        const title = document.getElementById('title').value;
+        const content = document.getElementById('content').value;
+        
+        try {
+            await addDoc(collection(db, "artifacts", appId, "public", "data", "posts"), {
+                title,
+                content,
+                authorId: currentUser.uid,
+                authorName: currentUser.isAnonymous ? "Guest" : (currentUser.displayName || "Anonymous"),
+                createdAt: serverTimestamp(),
+                comments: []
+            });
+            navigateTo('feed');
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = "Publish";
+            renderError("Failed to save story: " + err.message);
+        }
     };
+}
 
-    firebase.initializeApp(firebaseConfig);
-  </script>
+async function renderPostDetail(id) {
+    viewContainer.innerHTML = `<div class="animate-pulse space-y-4"><div class="h-8 bg-gray-200 w-3/4 rounded"></div><div class="h-32 bg-gray-200 rounded"></div></div>`;
+    
+    try {
+        if (!currentUser) return;
+        const docRef = doc(db, "artifacts", appId, "public", "data", "posts", id);
+        const snap = await getDoc(docRef);
+        
+        if (!snap.exists()) {
+            viewContainer.innerHTML = `<p class="text-center py-10">Post not found.</p>`;
+            return;
+        }
+        
+        const post = snap.data();
+        viewContainer.innerHTML = `
+            <button onclick="navigateTo('feed')" class="text-indigo-600 mb-6 flex items-center hover:underline">← Back to Feed</button>
+            <article class="bg-white p-8 rounded-2xl shadow-sm border mb-8">
+                <h2 class="text-4xl font-bold mb-4">${escapeHtml(post.title)}</h2>
+                <div class="text-gray-500 text-sm mb-8">By ${escapeHtml(post.authorName || 'Anonymous')}</div>
+                <div class="prose max-w-none text-gray-800 leading-relaxed whitespace-pre-wrap">${escapeHtml(post.content)}</div>
+            </article>
+        `;
+    } catch (err) {
+        renderError("Could not load post: " + err.message);
+    }
+}
+
+function renderError(msg) {
+    const errDiv = document.createElement('div');
+    errDiv.className = "bg-red-50 text-red-600 p-4 rounded-lg mb-4 border border-red-100";
+    errDiv.textContent = msg;
+    viewContainer.prepend(errDiv);
+}
+
+function escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Initial Kickoff
+initAuth();
+
+</script>
 </body>
 </html>
