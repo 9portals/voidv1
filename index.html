@@ -52,17 +52,6 @@ button { cursor:pointer;}
 
 </div>
 
-<!-- PUBLISH -->
-<div id="publish-section" class="hidden">
-<h2>New Story</h2>
-<form id="publish-form">
-<input type="text" id="post-title" placeholder="Title" required/>
-<textarea id="post-content" rows="8" placeholder="Tell your story..." required></textarea>
-<button type="submit">Publish</button>
-</form>
-<button id="back-feed-btn">Back to Feed</button>
-</div>
-
 <!-- ACCOUNT -->
 <div id="account-section" class="hidden">
 <h2>Account</h2>
@@ -83,9 +72,8 @@ import {
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import {
-  getFirestore, collection, addDoc,
-  onSnapshot, doc, updateDoc,
-  increment, serverTimestamp
+  getFirestore, collection,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 /* CONFIG */
@@ -103,13 +91,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
-
 const postsCol = collection(db,"artifacts",appId,"public","data","posts");
 
 /* DOM */
 const authSection = document.getElementById("auth-section");
 const feedSection = document.getElementById("feed-section");
-const publishSection = document.getElementById("publish-section");
 const accountSection = document.getElementById("account-section");
 const postsContainer = document.getElementById("posts");
 
@@ -178,14 +164,9 @@ loginBtn.onclick = ()=>{
   authSection.classList.remove("hidden");
 };
 
+/* NEW STORY NAV */
 showPublishBtn.onclick = ()=>{
-  feedSection.classList.add("hidden");
-  publishSection.classList.remove("hidden");
-};
-
-document.getElementById("back-feed-btn").onclick = ()=>{
-  publishSection.classList.add("hidden");
-  feedSection.classList.remove("hidden");
+  window.location.href = "new.html";
 };
 
 showAccountBtn.onclick = ()=>{
@@ -246,31 +227,6 @@ function startPostsListener(){
     });
   });
 }
-
-/* PUBLISH */
-document.getElementById("publish-form").onsubmit = async e=>{
-  e.preventDefault();
-
-  if(!auth.currentUser) return alert("Login required");
-
-  const title = document.getElementById("post-title").value.trim();
-  const content = document.getElementById("post-content").value.trim();
-
-  await addDoc(postsCol,{
-    title,
-    content,
-    authorId: auth.currentUser.uid,
-    authorName: auth.currentUser.displayName||"Anonymous",
-    reactions:{like:0,fire:0,insight:0},
-    views:0,
-    createdAt: serverTimestamp()
-  });
-
-  document.getElementById("post-title").value="";
-  document.getElementById("post-content").value="";
-  publishSection.classList.add("hidden");
-  feedSection.classList.remove("hidden");
-};
 
 /* Escape */
 function escapeHTML(str){
