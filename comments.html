@@ -6,10 +6,9 @@
 <title>Comments</title>
 <style>
 body { font-family:sans-serif; padding:20px; }
-.comment { border-bottom:1px solid #ddd; padding:10px 0; }
-#add-comment { margin-top:20px; }
+.comment { border-bottom:1px solid #ddd; padding:10px 0; display:flex; justify-content:space-between; align-items:center; }
 textarea { width:100%; margin-bottom:5px; }
-button { padding:8px 12px; cursor:pointer; }
+button { padding:8px 12px; cursor:pointer; margin:2px; }
 </style>
 </head>
 <body>
@@ -20,6 +19,7 @@ button { padding:8px 12px; cursor:pointer; }
 <div id="add-comment">
   <textarea id="comment-text" rows="3" placeholder="Add a comment..."></textarea>
   <button id="submit-comment">Post Comment</button>
+  <button id="cancel-btn">Cancel</button>
 </div>
 
 <script type="module">
@@ -45,6 +45,7 @@ const postTitle = document.getElementById("post-title");
 const commentsList = document.getElementById("comments-list");
 const commentText = document.getElementById("comment-text");
 const submitCommentBtn = document.getElementById("submit-comment");
+const cancelBtn = document.getElementById("cancel-btn");
 
 let currentUser = null;
 onAuthStateChanged(auth, user => {
@@ -53,9 +54,10 @@ onAuthStateChanged(auth, user => {
   submitCommentBtn.disabled = !user;
 });
 
-// Get postId from URL
+// URL params
 const params = new URLSearchParams(window.location.search);
-const postId = params.get("id");
+const postId = params.get("postId");
+const replyTo = params.get("replyTo") || null;
 
 async function loadComments() {
   const postDoc = await getDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
@@ -64,20 +66,58 @@ async function loadComments() {
 
   postTitle.textContent = post.title;
   commentsList.innerHTML = (post.comments||[]).map(c=>`
-    <div class="comment"><b>${c.authorName}:</b> ${c.text}</div>
+    <div class="comment"><b>${c.authorName}</b>: ${c.text}
+      <button class="reply-btn">Reply</button>
+      <button class="like-comment-btn">❤️ ${c.likes||0}</button>
+      <button class="burn-comment-btn">🔥 ${c.burns||0}</button>
+    </div>
   `).join("");
+
+  // Attach event listeners
+  Array.from(commentsList.querySelectorAll(".reply-btn")).forEach((btn,i)=>{
+    btn.onclick = ()=> window.location.href=`comments.html?postId=${postId}&replyTo=${post.comments[i].authorId}`;
+  });
+
+  Array.from(commentsList.querySelectorAll(".like-comment-btn")).forEach((btn,i)=>{
+    btn.onclick = async ()=>{
+      if(!currentUser) return alert("Login to react!");
+      post.comments[i].likes = (post.comments[i].likes||0)+1;
+      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: post.comments});
+      loadComments();
+    };
+  });
+
+  Array.from(commentsList.querySelectorAll(".burn-comment-btn")).forEach((btn,i)=>{
+    btn.onclick = async ()=>{
+      if(!currentUser) return alert("Login to react!");
+      post.comments[i].burns = (post.comments[i].burns||0)+1;
+      await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: post.comments});
+      loadComments();
+    };
+  });
 }
 
-submitCommentBtn.addEventListener("click", async () => {
+// Submit comment
+submitCommentBtn.onclick = async ()=>{
   if(!currentUser) return alert("Login to comment!");
   const text = commentText.value.trim();
   if(!text) return;
-  await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-    comments: arrayUnion({authorName: currentUser.displayName||"Anonymous", text})
+  const postRef = doc(db,"artifacts",appId,"public","data","posts",postId);
+  await updateDoc(postRef,{
+    comments: arrayUnion({
+      text,
+      authorName: currentUser.displayName||"Anonymous",
+      authorId: currentUser.uid,
+      replyTo: replyTo,
+      createdAt: new Date().toISOString()
+    })
   });
-  commentText.value = "";
+  commentText.value="";
   loadComments();
-});
+};
+
+// Cancel button
+cancelBtn.onclick = ()=>window.history.back();
 
 loadComments();
 </script>
