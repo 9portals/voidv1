@@ -12,7 +12,10 @@ input, textarea, button { font-family:inherit; margin:5px 0; padding:8px; border
 button { cursor:pointer;}
 .post { border:1px solid #ddd; padding:15px; border-radius:15px; margin-bottom:15px;}
 .reaction-btn { margin-right:10px; cursor:pointer;}
-.comment { margin-left:15px; font-size:14px;}
+.meta { font-size:13px; color:#666; margin-bottom:8px;}
+.header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
+.preview-text { margin:10px 0; }
+.read-btn { background:#111; color:white; border:none; padding:6px 12px; border-radius:6px;}
 </style>
 </head>
 <body>
@@ -34,13 +37,19 @@ button { cursor:pointer;}
 
 <!-- FEED -->
 <div id="feed-section" class="hidden">
-<div style="display:flex;justify-content:space-between;align-items:center;">
+
+<div class="header-bar">
 <h1>Perspective</h1>
-<button id="logout-btn">Logout</button>
+<div>
+<button id="show-publish-btn" class="hidden">New Story</button>
+<button id="show-account-btn" class="hidden">Account</button>
+<button id="logout-btn" class="hidden">Logout</button>
+<button id="login-btn" class="hidden">Login</button>
 </div>
-<button id="show-publish-btn">New Story</button>
-<button id="show-account-btn">Account</button>
+</div>
+
 <div id="posts"></div>
+
 </div>
 
 <!-- PUBLISH -->
@@ -76,10 +85,10 @@ import {
 import {
   getFirestore, collection, addDoc,
   onSnapshot, doc, updateDoc,
-  increment, serverTimestamp, arrayUnion
+  increment, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-/* FIREBASE CONFIG */
+/* CONFIG */
 const firebaseConfig = {
   apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
@@ -103,62 +112,73 @@ const feedSection = document.getElementById("feed-section");
 const publishSection = document.getElementById("publish-section");
 const accountSection = document.getElementById("account-section");
 const postsContainer = document.getElementById("posts");
-const authError = document.getElementById("auth-error");
 
-let isLogin = true;
+const showPublishBtn = document.getElementById("show-publish-btn");
+const showAccountBtn = document.getElementById("show-account-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const loginBtn = document.getElementById("login-btn");
+
 let unsubscribePosts = null;
+let isLogin = true;
 
-/* Toggle Auth */
-document.getElementById("toggle-auth").onclick = () => {
+/* AUTH TOGGLE */
+document.getElementById("toggle-auth").onclick = ()=>{
   isLogin = !isLogin;
   document.getElementById("auth-title").innerText = isLogin?"Login":"Register";
   document.getElementById("auth-btn").innerText = isLogin?"Login":"Register";
   document.getElementById("fullname").classList.toggle("hidden");
 };
 
-/* Auth Submit */
+/* AUTH SUBMIT */
 document.getElementById("auth-form").onsubmit = async e=>{
   e.preventDefault();
-
-  const emailInput = document.getElementById("email");
-  const passwordInput = document.getElementById("password");
-  const fullnameInput = document.getElementById("fullname");
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  const fullname = document.getElementById("fullname").value;
 
   try{
     if(isLogin){
-      await signInWithEmailAndPassword(auth,emailInput.value,passwordInput.value);
+      await signInWithEmailAndPassword(auth,email,password);
     } else {
-      const cred = await createUserWithEmailAndPassword(auth,emailInput.value,passwordInput.value);
-      await updateProfile(cred.user,{displayName:fullnameInput.value});
+      const cred = await createUserWithEmailAndPassword(auth,email,password);
+      await updateProfile(cred.user,{displayName:fullname});
     }
-    authError.innerText="";
   }catch(err){
-    authError.innerText=err.message;
+    document.getElementById("auth-error").innerText = err.message;
   }
 };
 
-/* Auth State */
+/* AUTH STATE */
 onAuthStateChanged(auth,user=>{
+  feedSection.classList.remove("hidden");
+  authSection.classList.add("hidden");
+
   if(user){
-    authSection.classList.add("hidden");
-    feedSection.classList.remove("hidden");
+    showPublishBtn.classList.remove("hidden");
+    showAccountBtn.classList.remove("hidden");
+    logoutBtn.classList.remove("hidden");
+    loginBtn.classList.add("hidden");
+
     document.getElementById("display-name").innerText = user.displayName||"Anonymous";
     document.getElementById("display-email").innerText = user.email;
-    startPostsListener();
   } else {
-    if(unsubscribePosts) unsubscribePosts();
-    authSection.classList.remove("hidden");
-    feedSection.classList.add("hidden");
-    publishSection.classList.add("hidden");
-    accountSection.classList.add("hidden");
+    showPublishBtn.classList.add("hidden");
+    showAccountBtn.classList.add("hidden");
+    logoutBtn.classList.add("hidden");
+    loginBtn.classList.remove("hidden");
   }
+
+  startPostsListener();
 });
 
-/* Logout */
-document.getElementById("logout-btn").onclick = ()=>signOut(auth);
+/* HEADER BUTTONS */
+logoutBtn.onclick = ()=>signOut(auth);
+loginBtn.onclick = ()=>{
+  feedSection.classList.add("hidden");
+  authSection.classList.remove("hidden");
+};
 
-/* Navigation */
-document.getElementById("show-publish-btn").onclick = ()=>{
+showPublishBtn.onclick = ()=>{
   feedSection.classList.add("hidden");
   publishSection.classList.remove("hidden");
 };
@@ -168,7 +188,7 @@ document.getElementById("back-feed-btn").onclick = ()=>{
   feedSection.classList.remove("hidden");
 };
 
-document.getElementById("show-account-btn").onclick = ()=>{
+showAccountBtn.onclick = ()=>{
   feedSection.classList.add("hidden");
   accountSection.classList.remove("hidden");
 };
@@ -178,21 +198,13 @@ document.getElementById("back-feed-btn2").onclick = ()=>{
   feedSection.classList.remove("hidden");
 };
 
-/* Save Display Name */
-document.getElementById("save-display-btn").onclick = async ()=>{
-  const newName = document.getElementById("edit-display-name").value.trim();
-  if(!newName) return;
-  await updateProfile(auth.currentUser,{displayName:newName});
-  document.getElementById("display-name").innerText = newName;
-  document.getElementById("edit-display-name").value="";
-};
-
-/* Firestore Listener */
+/* POSTS LISTENER */
 function startPostsListener(){
   if(unsubscribePosts) unsubscribePosts();
 
   unsubscribePosts = onSnapshot(postsCol,snapshot=>{
     postsContainer.innerHTML="";
+
     const docs = snapshot.docs.sort((a,b)=>{
       return (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0);
     });
@@ -201,75 +213,66 @@ function startPostsListener(){
       const post = docSnap.data();
       const postId = docSnap.id;
 
-      const div=document.createElement("div");
+      const preview = post.content.length > 200
+        ? post.content.substring(0,200)+"..."
+        : post.content;
+
+      const date = post.createdAt?.seconds
+        ? new Date(post.createdAt.seconds*1000).toLocaleDateString()
+        : "";
+
+      const div = document.createElement("div");
       div.className="post";
 
-      div.innerHTML=`
-        <h3>${escapeHTML(post.title)}</h3>
-        <p>${escapeHTML(post.content)}</p>
-        <button class="reaction-btn" data-type="like">❤️ ${post.reactions?.like||0}</button>
-        <button class="reaction-btn" data-type="fire">🔥 ${post.reactions?.fire||0}</button>
-        <button class="reaction-btn" data-type="insight">💡 ${post.reactions?.insight||0}</button>
-        <div>
-          <input placeholder="Add comment"/>
-          <button class="send-comment">Send</button>
+      div.innerHTML = `
+        <div class="meta">
+          <b>${escapeHTML(post.authorName||"Anonymous")}</b> • ${date}
         </div>
-        ${(post.comments||[]).map(c=>
-          `<p class="comment"><b>${escapeHTML(c.authorName)}:</b> ${escapeHTML(c.text)}</p>`
-        ).join("")}
+        <h3>${escapeHTML(post.title)}</h3>
+        <p class="preview-text">${escapeHTML(preview)}</p>
+        <div class="meta">
+          ❤️ ${post.reactions?.like||0}
+          🔥 ${post.reactions?.fire||0}
+          💡 ${post.reactions?.insight||0}
+        </div>
+        <button class="read-btn">Read More</button>
       `;
 
       postsContainer.appendChild(div);
 
-      div.querySelectorAll(".reaction-btn").forEach(btn=>{
-        btn.onclick=()=>updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-          [`reactions.${btn.dataset.type}`]: increment(1)
-        });
-      });
-
-      const input = div.querySelector("input");
-      const sendBtn = div.querySelector(".send-comment");
-
-      sendBtn.onclick=()=>{
-        if(!input.value.trim()) return;
-        updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-          comments: arrayUnion({
-            text: input.value,
-            authorName: auth.currentUser.displayName||"Anonymous",
-            authorId: auth.currentUser.uid,
-            createdAt: new Date().toISOString()
-          })
-        });
-        input.value="";
+      div.querySelector(".read-btn").onclick = ()=>{
+        window.location.href = "posts.html?id="+postId;
       };
     });
   });
 }
 
-/* Publish */
-document.getElementById("publish-form").onsubmit=async e=>{
+/* PUBLISH */
+document.getElementById("publish-form").onsubmit = async e=>{
   e.preventDefault();
 
-  const titleInput = document.getElementById("post-title");
-  const contentInput = document.getElementById("post-content");
+  if(!auth.currentUser) return alert("Login required");
+
+  const title = document.getElementById("post-title").value.trim();
+  const content = document.getElementById("post-content").value.trim();
 
   await addDoc(postsCol,{
-    title: titleInput.value.trim(),
-    content: contentInput.value.trim(),
+    title,
+    content,
     authorId: auth.currentUser.uid,
     authorName: auth.currentUser.displayName||"Anonymous",
     reactions:{like:0,fire:0,insight:0},
-    comments:[],
+    views:0,
     createdAt: serverTimestamp()
   });
 
-  titleInput.value="";
-  contentInput.value="";
+  document.getElementById("post-title").value="";
+  document.getElementById("post-content").value="";
   publishSection.classList.add("hidden");
   feedSection.classList.remove("hidden");
 };
 
-/* Escape HTML */
+/* Escape */
 function escapeHTML(str){
   return str?.replace(/[&<>"']/g,m=>({
     "&":"&amp;","<":"&lt;",">":"&gt;",
