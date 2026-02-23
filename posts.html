@@ -15,14 +15,18 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 .reaction-btn { margin-right:10px; cursor:pointer; display: inline-block; }
 .comments { margin-top:20px; }
 .comment { border-top:1px solid #eee; padding:12px 0; display:flex; justify-content:space-between; align-items:center; }
-.comment b { margin-right:5px; cursor:pointer; color:blue; text-decoration:underline; }
+
+/* Updated Username Styling: Black, No Underline */
+.comment b, .author-name { margin-right:5px; cursor:pointer; color:#111; text-decoration:none; }
+.comment b:hover, .author-name:hover { opacity: 0.7; }
+
 #add-comment-btn, #back-btn { margin-top:10px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Perspective</h1>
+  <h1 style="cursor:pointer">Perspective</h1>
   <div id="top-buttons">
     <button id="login-btn">Login / Register</button>
     <button id="account-btn">Account</button>
@@ -104,7 +108,12 @@ async function loadPost(){
 
   titleEl.textContent = post.title;
   contentEl.textContent = post.content;
+  
+  // Post Author clickable
   authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b>`;
+  authorDateEl.querySelector(".author-name").onclick = e => {
+    window.location.href = `account.html?uid=${e.target.dataset.uid}`;
+  };
 
   // Reactions
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
@@ -128,6 +137,11 @@ async function loadPost(){
           <b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
         </div>
         <button class="reply-btn btn-dark" style="display:inline-block; font-size: 0.8em; padding: 4px 8px;">Reply</button>`;
+
+      // Comment Username clickable
+      div.querySelector(".comment-user").onclick = e => {
+        window.location.href = `account.html?uid=${e.target.dataset.uid}`;
+      };
 
       div.querySelector(".reply-btn").onclick = ()=>{
         window.location.href = `comments.html?postId=${postId}&replyTo=${encodeURIComponent(c.authorName)}`;
