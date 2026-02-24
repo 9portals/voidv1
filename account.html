@@ -13,6 +13,7 @@ body { font-family:sans-serif; background:#FDFDFF; padding:20px; color:#111; }
 <h1>Account</h1>
 <div class="card">
   <h2 id="username"></h2>
+  <p id="bio"></p>
   <p id="email"></p>
 </div>
 
@@ -22,7 +23,7 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_KEY",
+  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
   projectId: "pulsenet-d1fe0"
 };
@@ -37,12 +38,16 @@ const profileUid = params.get("uid");
 
 async function loadProfile(uid){
   const snap = await getDoc(doc(db,"artifacts",appId,"public","data","users",uid));
+
   if(!snap.exists()){
     document.getElementById("username").textContent="User not found";
     return;
   }
+
   const user = snap.data();
-  document.getElementById("username").textContent = user.username;
+
+  document.getElementById("username").textContent = user.username || "Anonymous";
+  document.getElementById("bio").textContent = user.bio || "";
   document.getElementById("email").textContent = user.email || "";
 }
 
