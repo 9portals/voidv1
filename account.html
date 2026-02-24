@@ -5,21 +5,21 @@
 <title>Account</title>
 <style>
 body { font-family:sans-serif; background:#FDFDFF; padding:20px; color:#111; }
-.card { border:1px solid #ddd; padding:20px; border-radius:15px; }
+.card { border:1px solid #ddd; padding:20px; border-radius:15px; max-width:500px; margin:auto; }
+h1 { text-align:center; margin-bottom:20px; }
 </style>
 </head>
 <body>
 
 <h1>Account</h1>
+
 <div class="card">
   <h2 id="username"></h2>
   <p id="bio"></p>
-  <p id="email"></p>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -29,35 +29,28 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
 const params = new URLSearchParams(window.location.search);
-const profileUid = params.get("uid");
+const uid = params.get("uid"); // user whose profile to show
 
 async function loadProfile(uid){
+  if(!uid) return;
+
   const snap = await getDoc(doc(db,"artifacts",appId,"public","data","users",uid));
 
   if(!snap.exists()){
-    document.getElementById("username").textContent="User not found";
+    document.getElementById("username").textContent = "User not found";
     return;
   }
 
-  const user = snap.data();
-
-  document.getElementById("username").textContent = user.username || "Anonymous";
-  document.getElementById("bio").textContent = user.bio || "";
-  document.getElementById("email").textContent = user.email || "";
+  const data = snap.data();
+  document.getElementById("username").textContent = data.username || "Anonymous";
+  document.getElementById("bio").textContent = data.bio || "";
 }
 
-if(profileUid){
-  loadProfile(profileUid);
-} else {
-  onAuthStateChanged(auth,user=>{
-    if(user) loadProfile(user.uid);
-  });
-}
+loadProfile(uid);
 </script>
 </body>
 </html>
