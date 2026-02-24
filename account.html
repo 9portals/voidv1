@@ -20,6 +20,7 @@ h1 { text-align:center; margin-bottom:20px; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -29,28 +30,39 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
 const params = new URLSearchParams(window.location.search);
-const uid = params.get("uid"); // user whose profile to show
+let uid = params.get("uid");
 
-async function loadProfile(uid){
-  if(!uid) return;
+async function loadProfile(profileUid){
 
-  const snap = await getDoc(doc(db,"artifacts",appId,"public","data","users",uid));
+  const userRef = doc(db,"artifacts",appId,"public","data","users",profileUid);
+  const snap = await getDoc(userRef);
 
   if(!snap.exists()){
     document.getElementById("username").textContent = "User not found";
+    document.getElementById("bio").textContent = "";
     return;
   }
 
   const data = snap.data();
+
   document.getElementById("username").textContent = data.username || "Anonymous";
   document.getElementById("bio").textContent = data.bio || "";
 }
 
-loadProfile(uid);
+if(uid){
+  loadProfile(uid);
+} else {
+  onAuthStateChanged(auth,user=>{
+    if(user){
+      loadProfile(user.uid);
+    }
+  });
+}
 </script>
 </body>
 </html>
