@@ -15,6 +15,8 @@ button { cursor:pointer;}
 .meta { font-size:13px; color:#666; margin-bottom:8px;}
 .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
 .preview-text { margin:10px 0; }
+
+/* SAME STYLE FOR HEADER BUTTONS */
 .read-btn {
   background:#111;
   color:white;
@@ -77,10 +79,9 @@ import {
   signInWithEmailAndPassword, updateProfile,
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-
 import {
-  getFirestore, collection, onSnapshot,
-  doc, setDoc   /* 🔥 ADDED */
+  getFirestore, collection,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 /* CONFIG */
@@ -134,18 +135,7 @@ document.getElementById("auth-form").onsubmit = async e=>{
       await signInWithEmailAndPassword(auth,email,password);
     } else {
       const cred = await createUserWithEmailAndPassword(auth,email,password);
-
       await updateProfile(cred.user,{displayName:fullname});
-
-      /* 🔥 CREATE USER DOCUMENT (ONLY ADDITION) */
-      await setDoc(
-        doc(db,"artifacts",appId,"public","data","users",cred.user.uid),
-        {
-          username: fullname,
-          bio: "",
-          email: cred.user.email
-        }
-      );
     }
   }catch(err){
     document.getElementById("auth-error").innerText = err.message;
@@ -182,10 +172,12 @@ loginBtn.onclick = ()=>{
   authSection.classList.remove("hidden");
 };
 
+/* New Story */
 showPublishBtn.onclick = ()=>{
   window.location.href = "new.html";
 };
 
+/* Account button → edit.html */
 showAccountBtn.onclick = ()=>{
   window.location.href = "edit.html";
 };
@@ -238,6 +230,7 @@ function startPostsListener(){
         window.location.href = "posts.html?id="+postId;
       };
 
+      /* Username click → account.html */
       const authorLink = div.querySelector(".author-link");
       if(authorLink){
         authorLink.onclick = ()=>{
