@@ -4,19 +4,8 @@
 <meta charset="UTF-8">
 <title>Edit Profile</title>
 <style>
-body { 
-  font-family:sans-serif; 
-  background:#FDFDFF; 
-  padding:20px; 
-  color:#111; 
-}
-.card { 
-  border:1px solid #ddd; 
-  padding:20px; 
-  border-radius:15px; 
-  max-width:500px; 
-  margin:auto; 
-}
+body { font-family:sans-serif; background:#FDFDFF; padding:20px; color:#111; }
+.card { border:1px solid #ddd; padding:20px; border-radius:15px; max-width:500px; margin:auto; }
 input, textarea, button {
   width:100%;
   margin:8px 0;
@@ -31,10 +20,7 @@ button {
   border:none;
   cursor:pointer;
 }
-h1 { 
-  text-align:center; 
-  margin-bottom:20px; 
-}
+h1 { text-align:center; margin-bottom:20px; }
 </style>
 </head>
 <body>
@@ -49,19 +35,9 @@ h1 {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  updateProfile 
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc 
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-/* Firebase Config */
 const firebaseConfig = {
   apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
@@ -73,33 +49,22 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
-let currentUser = null;
+let currentUser;
 
-/* Load current user */
 onAuthStateChanged(auth, async (user) => {
 
-  if (!user) {
+  if(!user){
     window.location.href = "index.html";
     return;
   }
 
   currentUser = user;
 
-  const userRef = doc(
-    db,
-    "artifacts",
-    appId,
-    "public",
-    "data",
-    "users",
-    user.uid
-  );
-
+  const userRef = doc(db,"artifacts",appId,"public","data","users",user.uid);
   const snap = await getDoc(userRef);
 
-  // Create user document if it doesn't exist
-  if (!snap.exists()) {
-    await setDoc(userRef, {
+  if(!snap.exists()){
+    await setDoc(userRef,{
       username: user.displayName || "",
       bio: "",
       email: user.email
@@ -112,38 +77,26 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById("bio").value = data.bio || "";
 });
 
-/* Save profile */
 document.getElementById("save").onclick = async () => {
-
-  if (!currentUser) return;
 
   const username = document.getElementById("username").value.trim();
   const bio = document.getElementById("bio").value.trim();
 
-  if (!username) {
+  if(!username){
     alert("Username required");
     return;
   }
 
-  const userRef = doc(
-    db,
-    "artifacts",
-    appId,
-    "public",
-    "data",
-    "users",
-    currentUser.uid
-  );
+  const userRef = doc(db,"artifacts",appId,"public","data","users",currentUser.uid);
 
-  await setDoc(userRef, {
+  await setDoc(userRef,{
     username,
     bio,
     email: currentUser.email
-  }, { merge: true });
+  },{ merge:true });
 
-  await updateProfile(currentUser, { displayName: username });
+  await updateProfile(currentUser,{ displayName: username });
 
-  // 🔥 Redirect to profile view
   window.location.href = "account.html?uid=" + currentUser.uid;
 };
 </script>
