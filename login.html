@@ -43,27 +43,6 @@ button { cursor:pointer;}
 <div id="posts"></div>
 </div>
 
-<!-- PUBLISH -->
-<div id="publish-section" class="hidden">
-<h2>New Story</h2>
-<form id="publish-form">
-<input type="text" id="post-title" placeholder="Title" required/>
-<textarea id="post-content" rows="8" placeholder="Tell your story..." required></textarea>
-<button type="submit">Publish</button>
-</form>
-<button id="back-feed-btn">Back to Feed</button>
-</div>
-
-<!-- ACCOUNT -->
-<div id="account-section" class="hidden">
-<h2>Account</h2>
-<p><b>Name:</b> <span id="display-name"></span></p>
-<p><b>Email:</b> <span id="display-email"></span></p>
-<input type="text" id="edit-display-name" placeholder="New Display Name"/>
-<button id="save-display-btn">Save</button>
-<button id="back-feed-btn2">Back to Feed</button>
-</div>
-
 </div>
 
 <script type="module">
@@ -76,18 +55,18 @@ import {
 import {
   getFirestore, collection, addDoc,
   onSnapshot, doc, updateDoc,
-  increment, serverTimestamp, arrayUnion
+  increment, serverTimestamp, arrayUnion,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-/* 🔥 YOUR CONFIG */
+/* FIREBASE CONFIG */
 const firebaseConfig = {
-  apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
+  apiKey: "YOUR_KEY",
   authDomain: "pulsenet-d1fe0.firebaseapp.com",
   projectId: "pulsenet-d1fe0",
   storageBucket: "pulsenet-d1fe0.firebasestorage.app",
   messagingSenderId: "816402062445",
-  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364",
-  measurementId: "G-MDN646R1XP"
+  appId: "1:816402062445:web:cf7ce7eb9c57c1ef2fb364"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -95,20 +74,20 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 
+/* 🔥 POSTS COLLECTION */
 const postsCol = collection(db,"artifacts",appId,"public","data","posts");
+const usersCol = collection(db,"artifacts",appId,"public","data","users");
 
 /* DOM */
 const authSection = document.getElementById("auth-section");
 const feedSection = document.getElementById("feed-section");
-const publishSection = document.getElementById("publish-section");
-const accountSection = document.getElementById("account-section");
 const postsContainer = document.getElementById("posts");
 const authError = document.getElementById("auth-error");
 
 let isLogin = true;
 let unsubscribePosts = null;
 
-/* Toggle Auth */
+/* Toggle Login/Register */
 document.getElementById("toggle-auth").onclick = () => {
   isLogin = !isLogin;
   document.getElementById("auth-title").innerText = isLogin?"Login":"Register";
@@ -119,50 +98,62 @@ document.getElementById("toggle-auth").onclick = () => {
 /* Auth Submit */
 document.getElementById("auth-form").onsubmit = async e=>{
   e.preventDefault();
-  const email = email.value;
-  const password = password.value;
-  const fullname = fullname.value;
+
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  const fullname = document.getElementById("fullname").value;
 
   try{
     if(isLogin){
       await signInWithEmailAndPassword(auth,email,password);
     } else {
+
+      /* CREATE AUTH USER */
       const cred = await createUserWithEmailAndPassword(auth,email,password);
+
+      /* UPDATE DISPLAY NAME */
       await updateProfile(cred.user,{displayName:fullname});
+
+      /* 🔥 CREATE FIRESTORE USER DOCUMENT */
+      await setDoc(
+        doc(db,"artifacts",appId,"public","data","users",cred.user.uid),
+        {
+          displayName: fullname,
+          email: email,
+          role: "user",
+          createdAt: serverTimestamp()
+        }
+      );
     }
+
     authError.innerText="";
   }catch(err){
     authError.innerText=err.message;
   }
 };
 
-/* Auth State */
+/* Auth State Listener */
 onAuthStateChanged(auth,user=>{
   if(user){
     authSection.classList.add("hidden");
     feedSection.classList.remove("hidden");
-    document.getElementById("display-name").innerText = user.displayName||"Anonymous";
-    document.getElementById("display-email").innerText = user.email;
-
     startPostsListener();
   } else {
     if(unsubscribePosts) unsubscribePosts();
     authSection.classList.remove("hidden");
     feedSection.classList.add("hidden");
-    publishSection.classList.add("hidden");
-    accountSection.classList.add("hidden");
   }
 });
 
 /* Logout */
 document.getElementById("logout-btn").onclick = ()=>signOut(auth);
 
-/* Start Firestore Listener ONLY after login */
+/* Posts Listener */
 function startPostsListener(){
   unsubscribePosts = onSnapshot(postsCol,snapshot=>{
     postsContainer.innerHTML="";
     snapshot.docs
-      .sort((a,b)=>b.data().createdAt?.seconds - a.data().createdAt?.seconds)
+      .sort((a,b)=> (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0))
       .forEach(docSnap=>{
         const post = docSnap.data();
         const postId = docSnap.id;
@@ -175,57 +166,18 @@ function startPostsListener(){
           <button class="reaction-btn" data-type="like">❤️ ${post.reactions?.like||0}</button>
           <button class="reaction-btn" data-type="fire">🔥 ${post.reactions?.fire||0}</button>
           <button class="reaction-btn" data-type="insight">💡 ${post.reactions?.insight||0}</button>
-          <div>
-            <input placeholder="Add comment"/>
-            <button>Send</button>
-          </div>
-          ${(post.comments||[]).map(c=>
-            `<p class="comment"><b>${escapeHTML(c.authorName)}:</b> ${escapeHTML(c.text)}</p>`
-          ).join("")}
         `;
         postsContainer.appendChild(div);
 
-        /* Reactions */
         div.querySelectorAll(".reaction-btn").forEach(btn=>{
-          btn.onclick=()=>updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-            [`reactions.${btn.dataset.type}`]: increment(1)
-          });
+          btn.onclick=()=>updateDoc(
+            doc(db,"artifacts",appId,"public","data","posts",postId),
+            { [`reactions.${btn.dataset.type}`]: increment(1) }
+          );
         });
-
-        /* Comments */
-        const input = div.querySelector("input");
-        const sendBtn = div.querySelector("button:last-of-type");
-        sendBtn.onclick=()=>{
-          if(!input.value.trim()) return;
-          updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{
-            comments: arrayUnion({
-              text: input.value,
-              authorName: auth.currentUser.displayName||"Anonymous",
-              authorId: auth.currentUser.uid,
-              createdAt: new Date().toISOString()
-            })
-          });
-          input.value="";
-        };
       });
-  },err=>console.error("Firestore Error:",err));
-}
-
-/* Publish */
-document.getElementById("publish-form").onsubmit=async e=>{
-  e.preventDefault();
-  await addDoc(postsCol,{
-    title: post-title.value.trim(),
-    content: post-content.value.trim(),
-    authorId: auth.currentUser.uid,
-    authorName: auth.currentUser.displayName||"Anonymous",
-    reactions:{like:0,fire:0,insight:0},
-    comments:[],
-    createdAt: serverTimestamp()
   });
-  publishSection.classList.add("hidden");
-  feedSection.classList.remove("hidden");
-};
+}
 
 /* Escape HTML */
 function escapeHTML(str){
