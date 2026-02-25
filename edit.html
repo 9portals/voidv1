@@ -4,33 +4,50 @@
 <meta charset="UTF-8">
 <title>Edit Profile</title>
 <style>
-body { font-family:sans-serif; background:#FDFDFF; padding:20px; color:#111; }
-.card { border:1px solid #ddd; padding:20px; border-radius:15px; max-width:500px; margin:auto; }
-input, textarea, button {
-  width:100%;
-  margin:8px 0;
-  padding:8px;
-  border-radius:8px;
-  border:1px solid #ccc;
-  font-family:inherit;
-}
-button {
-  background:#111;
-  color:white;
-  border:none;
-  cursor:pointer;
-}
-h1 { text-align:center; margin-bottom:20px; }
+  body { font-family:sans-serif; background:#FDFDFF; padding:20px; color:#111; }
+  .container { max-width: 1000px; margin: auto; display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; }
+  .card { border:1px solid #ddd; padding:20px; border-radius:15px; width:100%; max-width:450px; background: white; height: fit-content; }
+  
+  input, textarea, button {
+    width:100%;
+    margin:8px 0;
+    padding:12px;
+    border-radius:8px;
+    border:1px solid #ccc;
+    font-family:inherit;
+    box-sizing: border-box;
+  }
+  
+  button { background:#111; color:white; border:none; cursor:pointer; font-weight: bold; margin-top: 15px; }
+  button:hover { opacity: 0.8; }
+  
+  h1 { text-align:center; margin-bottom:30px; }
+  h3 { margin-top: 0; color: #666; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+  
+  /* Preview Specific Styles (Matching account.html) */
+  .preview-label { text-align: center; width: 100%; margin-bottom: 10px; color: #888; }
+  #preview-username { margin: 10px 0; font-size: 1.5rem; }
+  #preview-bio { color: #444; line-height: 1.5; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 
 <h1>Edit Profile</h1>
 
-<div class="card">
-  <input type="text" id="username" placeholder="Username">
-  <textarea id="bio" placeholder="Bio"></textarea>
-  <button id="save">Save</button>
+<div class="container">
+  <div class="card">
+    <h3>Edit Details</h3>
+    <input type="text" id="username" placeholder="Username" maxlength="25">
+    <textarea id="bio" placeholder="Tell us about yourself..." rows="5"></textarea>
+    <button id="save">Save Changes</button>
+  </div>
+
+  <div class="card">
+    <h3>Live Preview</h3>
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+    <h2 id="preview-username">Username</h2>
+    <p id="preview-bio">Your bio will appear here...</p>
+  </div>
 </div>
 
 <script type="module">
@@ -51,13 +68,26 @@ const appId = "pulsenet-d1fe0";
 
 let currentUser;
 
-onAuthStateChanged(auth, async (user) => {
+// Elements
+const usernameInput = document.getElementById("username");
+const bioInput = document.getElementById("bio");
+const previewName = document.getElementById("preview-username");
+const previewBio = document.getElementById("preview-bio");
 
+// --- LIVE PREVIEW LOGIC ---
+const updatePreview = () => {
+  previewName.textContent = usernameInput.value || "Anonymous";
+  previewBio.textContent = bioInput.value || "This is where the bio will go...";
+};
+
+usernameInput.addEventListener("input", updatePreview);
+bioInput.addEventListener("input", updatePreview);
+
+onAuthStateChanged(auth, async (user) => {
   if(!user){
     window.location.href = "index.html";
     return;
   }
-
   currentUser = user;
 
   const userRef = doc(db,"artifacts",appId,"public","data","users",user.uid);
@@ -73,14 +103,15 @@ onAuthStateChanged(auth, async (user) => {
 
   const data = (await getDoc(userRef)).data();
 
-  document.getElementById("username").value = data.username || "";
-  document.getElementById("bio").value = data.bio || "";
+  // Populate inputs and preview
+  usernameInput.value = data.username || "";
+  bioInput.value = data.bio || "";
+  updatePreview(); 
 });
 
 document.getElementById("save").onclick = async () => {
-
-  const username = document.getElementById("username").value.trim();
-  const bio = document.getElementById("bio").value.trim();
+  const username = usernameInput.value.trim();
+  const bio = bioInput.value.trim();
 
   if(!username){
     alert("Username required");
@@ -89,15 +120,21 @@ document.getElementById("save").onclick = async () => {
 
   const userRef = doc(db,"artifacts",appId,"public","data","users",currentUser.uid);
 
-  await setDoc(userRef,{
-    username,
-    bio,
-    email: currentUser.email
-  },{ merge:true });
+  try {
+    await setDoc(userRef,{
+      username,
+      bio,
+      email: currentUser.email
+    },{ merge:true });
 
-  await updateProfile(currentUser,{ displayName: username });
-
-  window.location.href = "account.html?uid=" + currentUser.uid;
+    await updateProfile(currentUser,{ displayName: username });
+    
+    // Redirect to the account page to see the final result
+    window.location.href = "account.html?uid=" + currentUser.uid;
+  } catch (e) {
+    console.error("Error updating profile:", e);
+    alert("Failed to save changes.");
+  }
 };
 </script>
 
