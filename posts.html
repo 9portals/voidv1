@@ -113,7 +113,7 @@ async function loadPost(){
   const post = postDoc.data();
 
   titleEl.textContent = post.title;
-  contentEl.textContent = post.content;
+  contentEl.innerHTML = formatPostText(post.content);
   authorDateEl.innerHTML = `By <b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName || "Anonymous")}</b>`;
 
   // Attach click ONLY to author (safe)
@@ -124,7 +124,7 @@ async function loadPost(){
     };
   }
 
-  // Reactions (UNCHANGED)
+  // Reactions
   reactionsEl.querySelectorAll(".reaction-btn").forEach(btn=>{
     const type = btn.dataset.reaction;
     btn.textContent = `${btn.textContent.split(" ")[0]} ${post.reactions?.[type]||0}`;
@@ -135,15 +135,15 @@ async function loadPost(){
     };
   });
 
-  // Comments List (UNCHANGED except click added safely)
+  // Comments List
   commentsListEl.innerHTML = "";
-  (post.comments || []).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt))
+  (post.comments || []).sort((a,b)=> new Date(a.createdAt)- new Date(b.createdAt))
     .forEach(c=>{
       const div = document.createElement("div");
       div.className="comment";
       div.innerHTML = `
         <div>
-          <b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
+          <b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${formatPostText(c.text)}
         </div>
         <button class="reply-btn btn-dark" style="display:inline-block; font-size: 0.8em; padding: 4px 8px;">Reply</button>`;
 
@@ -164,8 +164,37 @@ async function loadPost(){
 
 addCommentBtn.onclick = () => window.location.href = `comments.html?postId=${postId}`;
 
+// --- Formatting functions ---
+
 function escapeHTML(str){
   return str?.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+
+function formatPostText(str){
+  if(!str) return "";
+  let s = escapeHTML(str);
+
+  // Line breaks
+  s = s.replace(/\n/g, "<br>");
+
+  // Bold, Italic, Underline
+  s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  s = s.replace(/\*(.+?)\*/g, "<i>$1</i>");
+  s = s.replace(/__(.+?)__/g, "<u>$1</u>");
+
+  // Blockquote
+  s = s.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>");
+
+  // Inline code
+  s = s.replace(/`(.+?)`/g, "<code>$1</code>");
+
+  // Shortlinks: show first 30 chars + "..." if long
+  s = s.replace(/(https?:\/\/[^\s]+)/g, url=>{
+    const short = url.length > 30 ? url.slice(0,30) + "..." : url;
+    return `<a href="${url}" target="_blank">${short}</a>`;
+  });
+
+  return s;
 }
 
 loadPost();
