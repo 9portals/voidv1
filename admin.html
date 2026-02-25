@@ -16,8 +16,10 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 .comments { margin-top:20px; }
 .comment { border-top:1px solid #eee; padding:12px 0; display:flex; justify-content:space-between; align-items:center; }
 .comment b, .author-name { margin-right:5px; cursor:pointer; color:#111; text-decoration:none; }
-.edit-btn, .delete-btn { padding:4px 8px; font-size:0.8em; margin-left:5px; }
 .comment-controls { margin-left:10px; }
+.user-list { border:1px solid #ddd; padding:15px; border-radius:15px; margin-bottom:20px; }
+.user-item { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid #eee; }
+.user-item:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -31,12 +33,16 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 </div>
 </header>
 
+<h2>Users</h2>
+<div id="users-container" class="user-list"></div>
+
+<h2>Posts</h2>
 <div id="posts-container"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, collection, doc, onSnapshot, deleteDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, collection, doc, onSnapshot, deleteDoc, updateDoc, increment, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBeslEXxh_2j9dLiwAgeRL3p11iqgWfMgo",
@@ -52,14 +58,16 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = "pulsenet-d1fe0";
 const postsCol = collection(db,"artifacts",appId,"public","data","posts");
+const usersCol = collection(db,"artifacts",appId,"public","data","users"); // assuming users stored here
 
 const postsContainer = document.getElementById("posts-container");
+const usersContainer = document.getElementById("users-container");
 const loginBtn = document.getElementById("login-btn");
 const accountBtn = document.getElementById("account-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 let currentUser = null;
-const adminUIDs = ["4tUXqDRei1RUoPlNSwPOkI5ULtg1"]; // add more admins here
+let modUIDs = []; // populated dynamically from users who have role: 'mod'
 
 loginBtn.onclick = ()=>window.location.href="login.html";
 accountBtn.onclick = ()=>window.location.href="account.html";
@@ -68,16 +76,43 @@ logoutBtn.onclick = ()=>signOut(auth);
 onAuthStateChanged(auth,user=>{
   if(!user) return postsContainer.innerHTML="<p>Please login first.</p>";
   currentUser=user;
-  if(!adminUIDs.includes(user.uid)) return postsContainer.innerHTML="<p>You are not authorized.</p>";
+  loadUsers();
   loadPosts();
 });
+
+async function loadUsers(){
+  usersContainer.innerHTML="";
+  const snapshot = await getDocs(usersCol);
+  snapshot.docs.forEach(docSnap=>{
+    const user = docSnap.data();
+    const uid = docSnap.id;
+    if(user.role==='mod') modUIDs.push(uid);
+
+    const div = document.createElement("div");
+    div.className="user-item";
+    div.innerHTML = `
+      <span>${user.displayName || "Anonymous"} (${user.email}) - ${user.role || "user"}</span>
+      ${user.role !== 'mod' ? `<button class="promote-btn btn-dark">Promote to Mod</button>` : ""}
+    `;
+    usersContainer.appendChild(div);
+
+    const promoteBtn = div.querySelector(".promote-btn");
+    if(promoteBtn){
+      promoteBtn.onclick = async ()=>{
+        if(confirm(`Promote ${user.displayName} to Mod?`)){
+          await updateDoc(doc(db,"artifacts",appId,"public","data","users",uid),{role:'mod'});
+          alert(`${user.displayName} is now a Mod!`);
+          loadUsers();
+        }
+      };
+    }
+  });
+}
 
 function loadPosts(){
   onSnapshot(postsCol, snapshot=>{
     postsContainer.innerHTML="";
-    const docs = snapshot.docs.sort((a,b)=>{
-      return (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0);
-    });
+    const docs = snapshot.docs.sort((a,b)=> (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0));
 
     docs.forEach(docSnap=>{
       const post = docSnap.data();
@@ -86,7 +121,6 @@ function loadPosts(){
       const div = document.createElement("div");
       div.className="post";
 
-      // Post HTML
       div.innerHTML = `
         <div class="meta"><b class="author-name" data-uid="${post.authorId}">${escapeHTML(post.authorName||"Anonymous")}</b> • ${post.createdAt?.seconds ? new Date(post.createdAt.seconds*1000).toLocaleString() : ""}</div>
         <h3>${escapeHTML(post.title)}</h3>
@@ -119,12 +153,10 @@ function loadPosts(){
 
       postsContainer.appendChild(div);
 
-      // Post Delete
       div.querySelector(".delete-btn").onclick = async ()=>{
         if(confirm("Delete this post?")) await deleteDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
       };
 
-      // Post Edit
       div.querySelector(".edit-btn").onclick = async ()=>{
         const newTitle = prompt("New Title:", post.title);
         const newContent = prompt("New Content:", post.content);
@@ -133,18 +165,15 @@ function loadPosts(){
         }
       };
 
-      // Post Reactions
       div.querySelectorAll(".reaction-btn").forEach(btn=>{
         btn.onclick = async ()=>{
           await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{[`reactions.${btn.dataset.type}`]: increment(1)});
         };
       });
 
-      // Author & comment click → account page
       const authorEl = div.querySelector(".author-name");
       if(authorEl) authorEl.onclick = ()=> window.location.href=`account.html?uid=${authorEl.dataset.uid}`;
 
-      // Comment Edit/Delete
       div.querySelectorAll(".comment").forEach(commentEl=>{
         const idx = commentEl.dataset.index;
         const editBtn = commentEl.querySelector(".edit-comment");
