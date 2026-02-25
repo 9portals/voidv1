@@ -2,30 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-
-<!-- FORCE DESKTOP VIEW ON ALL DEVICES -->
-<meta name="viewport" content="width=1200"/>
-
-<meta name="viewport" content="initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Pulsenet Vanilla SPA</title>
 <style>
-
-/* FORCE DESKTOP WIDTH */
-body {
-  font-family: sans-serif;
-  background:#FDFDFF;
-  color:#111;
-  margin:0;
-  padding:0;
-  min-width:1200px;
-}
-
-#app {
-  max-width: 1200px;
-  margin:auto;
-  padding:20px;
-}
-
+body { font-family: sans-serif; background:#FDFDFF; color:#111; margin:0; padding:0;}
+#app { max-width: 800px; margin:auto; padding:20px;}
 .hidden { display:none;}
 input, textarea, button { font-family:inherit; margin:5px 0; padding:8px; border-radius:5px; border:1px solid #ccc;}
 button { cursor:pointer;}
@@ -239,8 +220,6 @@ function startPostsListener(){
           ❤️ ${post.reactions?.like||0}
           🔥 ${post.reactions?.fire||0}
           💡 ${post.reactions?.insight||0}
-          💬 ${post.commentsCount||0}
-          👁 ${post.views||0}
         </div>
         <button class="read-btn">Read More</button>
       `;
@@ -251,6 +230,7 @@ function startPostsListener(){
         window.location.href = "posts.html?id="+postId;
       };
 
+      /* Username click → account.html */
       const authorLink = div.querySelector(".author-link");
       if(authorLink){
         authorLink.onclick = ()=>{
