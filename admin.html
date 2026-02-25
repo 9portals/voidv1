@@ -16,7 +16,8 @@ button { cursor:pointer; margin:5px; padding:8px 12px; border-radius:8px; border
 .comments { margin-top:20px; }
 .comment { border-top:1px solid #eee; padding:12px 0; display:flex; justify-content:space-between; align-items:center; }
 .comment b, .author-name { margin-right:5px; cursor:pointer; color:#111; text-decoration:none; }
-.edit-btn, .delete-btn { padding:4px 8px; font-size:0.9em; margin-right:5px; }
+.edit-btn, .delete-btn { padding:4px 8px; font-size:0.8em; margin-left:5px; }
+.comment-controls { margin-left:10px; }
 </style>
 </head>
 <body>
@@ -91,8 +92,8 @@ function loadPosts(){
         <h3>${escapeHTML(post.title)}</h3>
         <p>${escapeHTML(post.content)}</p>
         <div>
-          <button class="edit-btn btn-dark">Edit</button>
-          <button class="delete-btn btn-dark">Delete</button>
+          <button class="edit-btn btn-dark">Edit Post</button>
+          <button class="delete-btn btn-dark">Delete Post</button>
         </div>
         <div class="reactions">
           <button class="reaction-btn" data-type="like">❤️ ${post.reactions?.like||0}</button>
@@ -102,10 +103,14 @@ function loadPosts(){
         <div class="comments">
           <h4>Comments & Replies</h4>
           <div class="comments-list">
-            ${(post.comments||[]).map(c=>`
-              <div class="comment">
+            ${(post.comments||[]).map((c,i)=>`
+              <div class="comment" data-index="${i}">
                 <div>
                   <b class="comment-user" data-uid="${c.authorId}">${escapeHTML(c.authorName)}</b>: ${escapeHTML(c.text)}
+                  <span class="comment-controls">
+                    <button class="edit-comment btn-dark">Edit</button>
+                    <button class="delete-comment btn-dark">Delete</button>
+                  </span>
                 </div>
               </div>`).join("")}
           </div>
@@ -114,12 +119,12 @@ function loadPosts(){
 
       postsContainer.appendChild(div);
 
-      // Delete
+      // Post Delete
       div.querySelector(".delete-btn").onclick = async ()=>{
         if(confirm("Delete this post?")) await deleteDoc(doc(db,"artifacts",appId,"public","data","posts",postId));
       };
 
-      // Edit
+      // Post Edit
       div.querySelector(".edit-btn").onclick = async ()=>{
         const newTitle = prompt("New Title:", post.title);
         const newContent = prompt("New Content:", post.content);
@@ -128,7 +133,7 @@ function loadPosts(){
         }
       };
 
-      // Reactions
+      // Post Reactions
       div.querySelectorAll(".reaction-btn").forEach(btn=>{
         btn.onclick = async ()=>{
           await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{[`reactions.${btn.dataset.type}`]: increment(1)});
@@ -138,8 +143,31 @@ function loadPosts(){
       // Author & comment click → account page
       const authorEl = div.querySelector(".author-name");
       if(authorEl) authorEl.onclick = ()=> window.location.href=`account.html?uid=${authorEl.dataset.uid}`;
-      div.querySelectorAll(".comment-user").forEach(el=>{
-        el.onclick = ()=> window.location.href=`account.html?uid=${el.dataset.uid}`;
+
+      // Comment Edit/Delete
+      div.querySelectorAll(".comment").forEach(commentEl=>{
+        const idx = commentEl.dataset.index;
+        const editBtn = commentEl.querySelector(".edit-comment");
+        const deleteBtn = commentEl.querySelector(".delete-comment");
+
+        editBtn.onclick = async ()=>{
+          const newText = prompt("Edit comment:", post.comments[idx].text);
+          if(newText!==null){
+            const updatedComments = [...post.comments];
+            updatedComments[idx].text = newText;
+            await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: updatedComments});
+          }
+        };
+
+        deleteBtn.onclick = async ()=>{
+          if(confirm("Delete this comment?")){
+            const updatedComments = post.comments.filter((_,i)=>i!=idx);
+            await updateDoc(doc(db,"artifacts",appId,"public","data","posts",postId),{comments: updatedComments});
+          }
+        };
+
+        const userEl = commentEl.querySelector(".comment-user");
+        if(userEl) userEl.onclick = ()=> window.location.href=`account.html?uid=${userEl.dataset.uid}`;
       });
     });
   });
