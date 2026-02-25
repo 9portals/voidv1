@@ -47,7 +47,7 @@ button { cursor:pointer;}
 <div id="feed-section" class="hidden">
 
 <div class="header-bar">
-<h1 id="logo" style="cursor:pointer;">Specter</h1>
+<h1>Specter</h1>
 <div>
 <button id="show-publish-btn" class="hidden read-btn">New Story</button>
 <button id="show-account-btn" class="hidden read-btn">Account</button>
@@ -104,6 +104,7 @@ const postsCol = collection(db,"artifacts",appId,"public","data","posts");
 /* DOM */
 const authSection = document.getElementById("auth-section");
 const feedSection = document.getElementById("feed-section");
+const accountSection = document.getElementById("account-section");
 const postsContainer = document.getElementById("posts");
 
 const showPublishBtn = document.getElementById("show-publish-btn");
@@ -113,11 +114,6 @@ const loginBtn = document.getElementById("login-btn");
 
 let unsubscribePosts = null;
 let isLogin = true;
-
-/* LOGO REFRESH */
-document.getElementById("logo").onclick = ()=>{
-  window.location.reload();
-};
 
 /* AUTH TOGGLE */
 document.getElementById("toggle-auth").onclick = ()=>{
@@ -156,6 +152,9 @@ onAuthStateChanged(auth,user=>{
     showAccountBtn.classList.remove("hidden");
     logoutBtn.classList.remove("hidden");
     loginBtn.classList.add("hidden");
+
+    document.getElementById("display-name").innerText = user.displayName||"Anonymous";
+    document.getElementById("display-email").innerText = user.email;
   } else {
     showPublishBtn.classList.add("hidden");
     showAccountBtn.classList.add("hidden");
@@ -173,10 +172,12 @@ loginBtn.onclick = ()=>{
   authSection.classList.remove("hidden");
 };
 
+/* New Story */
 showPublishBtn.onclick = ()=>{
   window.location.href = "new.html";
 };
 
+/* Account button → edit.html */
 showAccountBtn.onclick = ()=>{
   window.location.href = "edit.html";
 };
@@ -204,8 +205,6 @@ function startPostsListener(){
         ? new Date(post.createdAt.seconds*1000).toLocaleDateString()
         : "";
 
-      const totalComments = (post.commentCount||0) + (post.replyCount||0);
-
       const div = document.createElement("div");
       div.className="post";
 
@@ -221,8 +220,6 @@ function startPostsListener(){
           ❤️ ${post.reactions?.like||0}
           🔥 ${post.reactions?.fire||0}
           💡 ${post.reactions?.insight||0}
-          💬 ${totalComments}
-          👁 ${post.views||0}
         </div>
         <button class="read-btn">Read More</button>
       `;
@@ -233,6 +230,7 @@ function startPostsListener(){
         window.location.href = "posts.html?id="+postId;
       };
 
+      /* Username click → account.html */
       const authorLink = div.querySelector(".author-link");
       if(authorLink){
         authorLink.onclick = ()=>{
